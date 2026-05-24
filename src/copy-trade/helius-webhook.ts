@@ -16,7 +16,7 @@
  * All Helius API calls go through `callHelius` for one place to audit
  * the wire format and one place to apply auth.
  */
-import type { Pool } from "pg";
+import type { DbPool } from "../db/index.js";
 
 const WEBHOOK_ID_KEY = "helius_webhook_id";
 
@@ -35,7 +35,7 @@ export interface ReconcileOpts {
   authHeader: string;       // HELIUS_WEBHOOK_SECRET
   addresses: string[];      // active leader wallets
   baseUrl?: string;         // override for tests
-  pool: Pool;
+  pool: DbPool;
 }
 
 export async function reconcileWebhook(opts: ReconcileOpts): Promise<HeliusWebhookConfig> {
@@ -74,7 +74,7 @@ export async function reconcileWebhook(opts: ReconcileOpts): Promise<HeliusWebho
   return target;
 }
 
-async function readPersistedId(pool: Pool): Promise<string | null> {
+async function readPersistedId(pool: DbPool): Promise<string | null> {
   const r = await pool.query(
     `SELECT value FROM stealth.system_config WHERE key = $1`,
     [WEBHOOK_ID_KEY],
@@ -82,7 +82,7 @@ async function readPersistedId(pool: Pool): Promise<string | null> {
   return r.rowCount && r.rowCount > 0 ? r.rows[0].value : null;
 }
 
-async function persistId(pool: Pool, id: string): Promise<void> {
+async function persistId(pool: DbPool, id: string): Promise<void> {
   await pool.query(
     `INSERT INTO stealth.system_config (key, value)
      VALUES ($1, $2)

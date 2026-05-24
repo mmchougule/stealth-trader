@@ -15,7 +15,7 @@
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { NATIVE_MINT } from "@solana/spl-token";
 import { B402Solana } from "@b402ai/solana";
-import type { Pool } from "pg";
+import type { DbPool } from "./db/index.js";
 import { deriveUserKeypair } from "./wallet.js";
 import { makeNotePersistence } from "./notePersistence.js";
 import type { SwapBackend } from "./trade.js";
@@ -24,7 +24,7 @@ export interface BackendDeps {
   masterSeed: Uint8Array;
   rpcUrl: string;
   cluster: "mainnet" | "devnet" | "localnet";
-  pool: Pool;
+  pool: DbPool;
   relayerUrl?: string;
 }
 

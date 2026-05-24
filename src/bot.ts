@@ -24,7 +24,9 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { Bot } from "grammy";
 import { loadConfig } from "./config.js";
 import { log } from "./log.js";
-import { getPool } from "./db/index.js";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { getPool, applySchema } from "./db/index.js";
 import { parseMasterSeed } from "./wallet.js";
 import { makeB402Backend, userPubkey, makeConnection } from "./b402-backend.js";
 import { makeBalanceStore } from "./balance.js";
@@ -39,7 +41,12 @@ async function main() {
   const cfg = loadConfig();
   log.info({ cluster: cfg.cluster }, "stealth-trader starting");
 
-  const pool = getPool();
+  const pool = await getPool();
+  // Apply sql/001..003 on every boot. Migrations are CREATE … IF NOT
+  // EXISTS, so re-running is a no-op. Zero-Docker users never touch psql.
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const sqlDir = path.resolve(here, "..", "sql");
+  await applySchema(pool, sqlDir);
   const masterSeed = parseMasterSeed(cfg.masterSeedHex);
   const resolvePubkey = (tgId: number): string => userPubkey(tgId, masterSeed);
 
@@ -174,7 +181,7 @@ function extractApiKey(rpcUrl: string): string {
 }
 
 interface DepositWatcherDeps {
-  pool: ReturnType<typeof getPool>;
+  pool: Awaited<ReturnType<typeof getPool>>;
   balance: ReturnType<typeof makeBalanceStore>;
   resolvePubkey: (tgId: number) => string;
   conn: Connection;

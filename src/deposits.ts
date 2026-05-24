@@ -20,7 +20,7 @@
  * Pure functions in this module (extractDeposits, cursorKey) are tested
  * directly; the boot loop is wired in bot.ts.
  */
-import type { Pool } from "pg";
+import type { DbPool } from "./db/index.js";
 
 const WSOL_AMOUNT_PATH = "amount"; // Helius native transfer field
 
@@ -85,7 +85,7 @@ export function cursorKey(tgId: number): string {
   return `deposit_cursor:${tgId}`;
 }
 
-export async function readCursor(pool: Pool, tgId: number): Promise<number> {
+export async function readCursor(pool: DbPool, tgId: number): Promise<number> {
   const r = await pool.query(
     `SELECT value FROM stealth.system_config WHERE key = $1`,
     [cursorKey(tgId)],
@@ -95,7 +95,7 @@ export async function readCursor(pool: Pool, tgId: number): Promise<number> {
   return Number.isFinite(n) ? n : 0;
 }
 
-export async function writeCursor(pool: Pool, tgId: number, slot: number): Promise<void> {
+export async function writeCursor(pool: DbPool, tgId: number, slot: number): Promise<void> {
   await pool.query(
     `INSERT INTO stealth.system_config (key, value) VALUES ($1, $2)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,

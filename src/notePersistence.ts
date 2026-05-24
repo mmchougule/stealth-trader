@@ -7,14 +7,14 @@
  * The SDK round-trips an opaque JSON string. We persist it as JSONB
  * (validated by JSON.parse on save) and rehydrate on load.
  */
-import type { Pool } from "pg";
+import type { DbPool } from "./db/index.js";
 
 export interface NotePersistence {
   load(): Promise<string | null>;
   save(data: string): Promise<void>;
 }
 
-export function makeNotePersistence(pool: Pool, viewingPubHex: string): NotePersistence {
+export function makeNotePersistence(pool: DbPool, viewingPubHex: string): NotePersistence {
   return {
     async load(): Promise<string | null> {
       const r = await pool.query(

@@ -30,7 +30,9 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-import { getPool } from "../db/index.js";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { getPool, applySchema } from "../db/index.js";
 import { parseMasterSeed } from "../wallet.js";
 import { makeB402Backend, userPubkey } from "../b402-backend.js";
 import { makeBalanceStore } from "../balance.js";
@@ -72,7 +74,10 @@ async function main() {
   }
   const cluster = (process.env.B402_CLUSTER ?? "mainnet") as "mainnet" | "devnet" | "localnet";
 
-  const pool = getPool();
+  const pool = await getPool();
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const sqlDir = path.resolve(here, "..", "..", "sql");
+  await applySchema(pool, sqlDir);
   const masterSeed = parseMasterSeed(masterSeedHex);
   const backend = makeB402Backend({
     masterSeed, rpcUrl, cluster, pool,

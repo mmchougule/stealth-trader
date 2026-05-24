@@ -16,7 +16,7 @@
  * The grammy framework is wired in `bot.ts`, not here, to keep this module
  * testable without booting a real Telegram connection.
  */
-import type { Pool } from "pg";
+import type { DbPool } from "./db/index.js";
 
 const SOL = 1_000_000_000n; // lamports per SOL
 
@@ -27,7 +27,7 @@ export interface CommandCtx {
 }
 
 export interface TelegramDeps {
-  pool: Pool;
+  pool: DbPool;
   authorizedTgUsers: ReadonlySet<number>;
   /** Returns the user's derived Solana public address (base58). Injected
    *  so tests don't need to import the wallet derivation chain. */

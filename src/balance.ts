@@ -16,10 +16,10 @@
  * append are atomic. A user reading mid-way through either sees the
  * pre-call state or the post-call state.
  */
-import type { Pool } from "pg";
+import type { DbPool } from "./db/index.js";
 import type { BalanceStore } from "./trade.js";
 
-export function makeBalanceStore(pool: Pool): BalanceStore {
+export function makeBalanceStore(pool: DbPool): BalanceStore {
   return {
     async debit(tgId: number, lamports: bigint, reason: string): Promise<boolean> {
       const client = await pool.connect();

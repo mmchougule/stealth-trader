@@ -11,7 +11,7 @@
  * Every handler returns `{ content: [{ type: "text", text: ... }] }`,
  * which is the MCP response shape. The text is what the LLM sees.
  */
-import type { Pool } from "pg";
+import type { DbPool } from "../db/index.js";
 import {
   followInput, unfollowInput, getWalletInput, getBalanceInput,
   listFollowsInput, privateBuyInput, cashoutInput, getHoldingsInput,
@@ -29,7 +29,7 @@ function formatAmount(rawAmount: string, decimals: number): string {
 }
 
 export interface McpDeps {
-  pool: Pool;
+  pool: DbPool;
   /** The Telegram user this MCP instance acts on behalf of. */
   tgId: number;
   resolvePubkey(tgId: number): string;

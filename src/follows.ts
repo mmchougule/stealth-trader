@@ -7,10 +7,10 @@
  * and the UNIQUE constraint on copy_trades_log dedupes concurrent
  * inserts at the database level.
  */
-import type { Pool } from "pg";
+import type { DbPool } from "./db/index.js";
 import type { Follow, CopyOutcome, FollowStore } from "./copy-trade/types.js";
 
-export function makeFollowStore(pool: Pool): FollowStore {
+export function makeFollowStore(pool: DbPool): FollowStore {
   return {
     async activeForLeader(leader: string): Promise<Follow[]> {
       const r = await pool.query(
