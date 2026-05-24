@@ -54,7 +54,7 @@ export interface BalanceStore {
 export interface TradeDeps {
   backend: SwapBackend;
   balance: BalanceStore;
-  /** Fee policy. Default: 0.05% + 0.0003 SOL flat (the b402-trader prod default). */
+  /** Fee policy. Default: 0.05% + 0.0003 SOL flat. */
   computeBuyFee?: (lamports: bigint) => bigint;
 }
 
