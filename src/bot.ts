@@ -70,6 +70,7 @@ async function main() {
   bot.command("follow", (c) => handlers.follow(toCmdCtx(c)));
   bot.command("follows", (c) => handlers.follows(toCmdCtx(c)));
   bot.command("unfollow", (c) => handlers.unfollow(toCmdCtx(c)));
+  bot.command("cashout", (c) => handlers.cashout(toCmdCtx(c)));
 
   // HTTP webhook receiver.
   const server = http.createServer(async (req, res) => {

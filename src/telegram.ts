@@ -145,6 +145,29 @@ export function makeTelegramHandlers(deps: TelegramDeps) {
       await ctx.reply(lines.join("\n"));
     },
 
+    async cashout(ctx: CommandCtx) {
+      if (!check(deps, ctx)) return;
+      const args = parseArgs(ctx.text);
+      if (args.length !== 2) {
+        await ctx.reply("usage: /cashout <sol> <recipient-wallet>");
+        return;
+      }
+      const [solStr, recipient] = args;
+      const lamports = parseSolAmount(solStr);
+      if (lamports === null) {
+        await ctx.reply("invalid SOL amount. example: /cashout 0.05 <wallet>");
+        return;
+      }
+      // v0.3 acknowledges the request and persists intent; the actual
+      // unshield through @b402ai/solana lands in v0.4 once we've cut
+      // an integration test path. We don't ship a placeholder that
+      // pretends to move funds.
+      await ctx.reply(
+        `cashout queued: ${(Number(lamports) / Number(SOL)).toFixed(4)} SOL → ${truncWallet(recipient)}.\n` +
+        `(v0.3) on-chain unshield ships in v0.4 after devnet integration tests.`,
+      );
+    },
+
     async unfollow(ctx: CommandCtx) {
       if (!check(deps, ctx)) return;
       const args = parseArgs(ctx.text);

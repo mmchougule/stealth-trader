@@ -1,7 +1,7 @@
 {
   "name": "stealth-trader",
-  "version": "0.1.0",
-  "description": "Copy-trade Solana leaders. Your wallet stays off-chain.",
+  "version": "0.3.0",
+  "description": "Private copy-trading for Solana. /follow a wallet; every mirrored trade lands in a shielded note signed by a relayer, not your wallet.",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {
@@ -9,11 +9,13 @@
   },
   "main": "dist/bot.js",
   "bin": {
-    "stealth-trader": "dist/cli.js"
+    "stealth-trader": "dist/cli.js",
+    "stealth-trader-mcp": "dist/mcp/index.js"
   },
   "scripts": {
     "dev": "tsx watch src/bot.ts",
     "start": "tsx src/bot.ts",
+    "mcp": "tsx src/mcp/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -22,6 +24,7 @@
   },
   "dependencies": {
     "@b402ai/solana": "^0.0.33",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@noble/hashes": "^2.2.0",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.0",
@@ -30,7 +33,9 @@
     "grammy": "^1.32.0",
     "pg": "^8.20.0",
     "pino": "^9.5.0",
-    "prompts": "^2.4.2"
+    "prompts": "^2.4.2",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
