@@ -48,6 +48,7 @@ async function main() {
     masterSeed,
     rpcUrl: cfg.heliusRpcUrl,
     cluster: cfg.cluster,
+    pool,
     ...(cfg.relayerUrl ? { relayerUrl: cfg.relayerUrl } : {}),
   });
   const balance = makeBalanceStore(pool);
@@ -57,6 +58,7 @@ async function main() {
     pool,
     authorizedTgUsers: cfg.authorizedTgUsers,
     resolvePubkey,
+    wallet: backend,
   });
   const follows = makeFollowStore(pool);
 

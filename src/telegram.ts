@@ -32,6 +32,12 @@ export interface TelegramDeps {
   /** Returns the user's derived Solana public address (base58). Injected
    *  so tests don't need to import the wallet derivation chain. */
   resolvePubkey(tgId: number): string;
+  /** Wallet backend — only used by /holdings and /cashout. Optional so
+   *  tests can omit it for non-wallet command coverage. */
+  wallet?: {
+    getHoldings(tgId: number): Promise<Array<{ mint: string; amount: string; decimals: number }>>;
+    cashout(args: { tgId: number; recipient: string; mint?: string }): Promise<{ txSignature: string }>;
+  };
 }
 
 export function makeTelegramHandlers(deps: TelegramDeps) {
@@ -81,11 +87,24 @@ export function makeTelegramHandlers(deps: TelegramDeps) {
 
     async holdings(ctx: CommandCtx) {
       if (!check(deps, ctx)) return;
-      // Shielded holdings live in the SDK's NoteStore, which is bot-process
-      // memory + Postgres (via the wider SDK persistence layer). v0.2
-      // ships the public-balance side; reading shielded balance per-user
-      // lands in v0.3 once we wire the SDK persistence adapter in.
-      await ctx.reply("holdings view ships in v0.3. for now, see /balance for public SOL.");
+      if (!deps.wallet) {
+        await ctx.reply("wallet backend not configured on this instance.");
+        return;
+      }
+      try {
+        const rows = await deps.wallet.getHoldings(ctx.tgId);
+        if (rows.length === 0) {
+          await ctx.reply("no shielded holdings.");
+          return;
+        }
+        const lines = rows.map((h) => {
+          const amt = formatAmount(h.amount, h.decimals);
+          return `${truncWallet(h.mint)}  ${amt}`;
+        });
+        await ctx.reply(lines.join("\n"));
+      } catch (e) {
+        await ctx.reply(`holdings failed: ${(e as Error).message}`);
+      }
     },
 
     async follow(ctx: CommandCtx) {
@@ -147,25 +166,28 @@ export function makeTelegramHandlers(deps: TelegramDeps) {
 
     async cashout(ctx: CommandCtx) {
       if (!check(deps, ctx)) return;
+      if (!deps.wallet) {
+        await ctx.reply("wallet backend not configured on this instance.");
+        return;
+      }
       const args = parseArgs(ctx.text);
-      if (args.length !== 2) {
-        await ctx.reply("usage: /cashout <sol> <recipient-wallet>");
+      // /cashout <recipient>          (unshields the user's largest wSOL note)
+      // /cashout <recipient> <mint>   (unshields the user's largest note of <mint>)
+      if (args.length < 1 || args.length > 2) {
+        await ctx.reply("usage: /cashout <recipient-wallet> [mint]");
         return;
       }
-      const [solStr, recipient] = args;
-      const lamports = parseSolAmount(solStr);
-      if (lamports === null) {
-        await ctx.reply("invalid SOL amount. example: /cashout 0.05 <wallet>");
+      const [recipient, mint] = args;
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,48}$/.test(recipient)) {
+        await ctx.reply("invalid recipient — must be a base58 Solana address.");
         return;
       }
-      // v0.3 acknowledges the request and persists intent; the actual
-      // unshield through @b402ai/solana lands in v0.4 once we've cut
-      // an integration test path. We don't ship a placeholder that
-      // pretends to move funds.
-      await ctx.reply(
-        `cashout queued: ${(Number(lamports) / Number(SOL)).toFixed(4)} SOL → ${truncWallet(recipient)}.\n` +
-        `(v0.3) on-chain unshield ships in v0.4 after devnet integration tests.`,
-      );
+      try {
+        const res = await deps.wallet.cashout({ tgId: ctx.tgId, recipient, ...(mint ? { mint } : {}) });
+        await ctx.reply(`unshielded to ${truncWallet(recipient)}\nsig: ${res.txSignature}\nno on-chain link to your deposit address.`);
+      } catch (e) {
+        await ctx.reply(`cashout failed: ${(e as Error).message}`);
+      }
     },
 
     async unfollow(ctx: CommandCtx) {
@@ -217,4 +239,12 @@ function parseSolAmount(s: string): bigint | null {
 function truncWallet(w: string): string {
   if (w.length <= 12) return w;
   return `${w.slice(0, 6)}…${w.slice(-4)}`;
+}
+
+function formatAmount(rawAmount: string, decimals: number): string {
+  if (decimals === 0) return rawAmount;
+  const padded = rawAmount.padStart(decimals + 1, "0");
+  const whole = padded.slice(0, padded.length - decimals);
+  const frac = padded.slice(padded.length - decimals).replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : whole;
 }

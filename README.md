@@ -51,8 +51,8 @@ You need: a Telegram bot token from [@BotFather](https://t.me/botfather), a free
 /follow <wallet> <sol>            start mirroring a leader at <sol> per buy
 /follows                          list active follows
 /unfollow <wallet>                stop mirroring
-/holdings                         shielded balances per mint  (v0.4)
-/cashout <sol> <recipient>        unshield to a fresh address  (v0.4)
+/holdings                         shielded balances per mint
+/cashout <recipient>              unshield to a fresh address
 ```
 
 ## MCP tools
@@ -63,13 +63,13 @@ Same operations, agent-callable. An agent can compose them: "find the top 5 wall
 |-----------------------|------------------------------------------------------------------------|
 | `get_wallet`          | returns the user's deposit address                                    |
 | `get_balance`         | public SOL balance available to the bot                               |
-| `get_holdings`        | shielded token balances (v0.4)                                        |
+| `get_holdings`        | shielded token balances per mint                                      |
 | `follow`              | start mirroring a leader at N SOL per buy                             |
 | `unfollow`            | stop mirroring                                                        |
 | `list_follows`        | active follows                                                        |
 | `private_buy`         | direct private buy of a mint                                          |
 | `discover_leaders`    | rank candidate wallets by recent on-chain PnL + activity              |
-| `cashout`             | unshield to a recipient with no on-chain link to the depositor (v0.4) |
+| `cashout`             | unshield to a recipient with no on-chain link to the depositor        |
 
 ## How it works
 
@@ -110,7 +110,7 @@ The first two rows are facts about `tx.accountKeys`. Verifiable on Solscan in 30
 
 ## Status
 
-v0.3 — Telegram surface + MCP server wired against `@b402ai/solana`. The SwapBackend dispatches real `sdk.swap` calls. Buys land in shielded notes today; `/cashout` and `/holdings` ship in v0.4 once the devnet integration suite is wired.
+v0.3 — Telegram surface + MCP server wired against `@b402ai/solana`. All commands hit real SDK calls: `/follow`-triggered copies dispatch `sdk.swap`, `/holdings` reads the shielded NoteStore (Postgres-backed for cold-boot durability), `/cashout` calls `sdk.unshield` to deliver native SOL to a fresh address with no on-chain link to the depositor.
 
 ## Limits
 

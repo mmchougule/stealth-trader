@@ -157,20 +157,67 @@ describe("private_buy", () => {
 });
 
 describe("cashout", () => {
-  it("returns a configured-off message when no cashout dep is supplied", async () => {
+  it("returns a configured-off message when no wallet dep is supplied", async () => {
     const { deps } = makeDeps();
     const r = await handlers.cashout({ recipient: VALID_WALLET, sol: 0.01 }, deps);
     expect(r.content[0].text).toMatch(/not configured/);
   });
 
-  it("delegates to the cashout dep when present", async () => {
-    let captured: { tgId: number; recipient: string; lamports: bigint } | null = null;
+  it("delegates to wallet.cashout when present", async () => {
+    let captured: { tgId: number; recipient: string; mint?: string } | null = null;
     const { deps } = makeDeps({
-      cashout: async (args) => { captured = args; return { ok: true, txSignature: "sig-cashout" }; },
+      wallet: {
+        async getHoldings() { return []; },
+        async cashout(args) { captured = args; return { txSignature: "sig-cashout" }; },
+      },
     });
     const r = await handlers.cashout({ recipient: VALID_WALLET, sol: 0.01 }, deps);
     expect(r.content[0].text).toMatch(/unshielded/);
-    expect(captured!.lamports).toBe(10_000_000n);
+    expect(captured!.recipient).toBe(VALID_WALLET);
+  });
+
+  it("surfaces backend errors verbatim", async () => {
+    const { deps } = makeDeps({
+      wallet: {
+        async getHoldings() { return []; },
+        async cashout() { throw new Error("Photon validity proof timeout"); },
+      },
+    });
+    const r = await handlers.cashout({ recipient: VALID_WALLET, sol: 0.01 }, deps);
+    expect(r.content[0].text).toMatch(/Photon validity proof timeout/);
+  });
+});
+
+describe("get_holdings", () => {
+  it("returns 'not configured' when wallet dep absent", async () => {
+    const { deps } = makeDeps();
+    const r = await handlers.get_holdings({}, deps);
+    expect(r.content[0].text).toMatch(/not configured/);
+  });
+
+  it("returns 'no shielded holdings' on an empty result", async () => {
+    const { deps } = makeDeps({
+      wallet: { async getHoldings() { return []; }, async cashout() { return { txSignature: "" }; } },
+    });
+    const r = await handlers.get_holdings({}, deps);
+    expect(r.content[0].text).toMatch(/no shielded holdings/);
+  });
+
+  it("formats per-mint rows with decimals", async () => {
+    const { deps } = makeDeps({
+      wallet: {
+        async getHoldings() {
+          return [
+            { mint: VALID_MINT, amount: "12345678", decimals: 6 },     // 12.345678
+            { mint: VALID_WALLET, amount: "5000000000", decimals: 9 }, // 5
+          ];
+        },
+        async cashout() { return { txSignature: "" }; },
+      },
+    });
+    const r = await handlers.get_holdings({}, deps);
+    expect(r.content[0].text).toContain("12.345678");
+    expect(r.content[0].text).toMatch(/\b5\b/);
   });
 });
 

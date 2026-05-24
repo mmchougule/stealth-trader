@@ -20,6 +20,14 @@ import {
 
 const SOL = 1_000_000_000n;
 
+function formatAmount(rawAmount: string, decimals: number): string {
+  if (decimals === 0) return rawAmount;
+  const padded = rawAmount.padStart(decimals + 1, "0");
+  const whole = padded.slice(0, padded.length - decimals);
+  const frac = padded.slice(padded.length - decimals).replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : whole;
+}
+
 export interface McpDeps {
   pool: Pool;
   /** The Telegram user this MCP instance acts on behalf of. */
@@ -32,8 +40,11 @@ export interface McpDeps {
       | { ok: false; error: string }
     >;
   };
-  /** Optional unshield (v0.3 stub returns "not implemented"). */
-  cashout?: (args: { tgId: number; recipient: string; lamports: bigint }) => Promise<{ ok: true; txSignature: string } | { ok: false; error: string }>;
+  /** Wallet-side ops (holdings + unshield). Optional so tests can omit. */
+  wallet?: {
+    getHoldings(tgId: number): Promise<Array<{ mint: string; amount: string; decimals: number }>>;
+    cashout(args: { tgId: number; recipient: string; mint?: string }): Promise<{ txSignature: string }>;
+  };
   /** Optional leader scoring. */
   discover?: (args: { candidates: string[]; lookbackHours: number }) => Promise<Array<{ wallet: string; score: number; buys: number; pnlSol: number }>>;
 }
@@ -66,15 +77,14 @@ export const handlers = {
 
   async get_holdings(_: unknown, d: McpDeps): Promise<Mcp> {
     getHoldingsInput.parse(_);
-    // Shielded holdings come from the SDK NoteStore, which we don't fan
-    // out per-MCP-call yet — wired in v0.4. For now, surface the public
-    // balance so the agent has SOMETHING to compose on.
-    const r = await d.pool.query(
-      `SELECT sol_balance_lamports FROM stealth.users WHERE tg_id = $1`,
-      [d.tgId],
-    );
-    const lamports = r.rowCount && r.rowCount > 0 ? BigInt(r.rows[0].sol_balance_lamports) : 0n;
-    return ok(`(v0.3) shielded-token holdings view ships in v0.4. public SOL: ${(Number(lamports) / Number(SOL)).toFixed(4)} SOL.`);
+    if (!d.wallet) return ok("wallet backend not configured.");
+    const rows = await d.wallet.getHoldings(d.tgId);
+    if (rows.length === 0) return ok("no shielded holdings.");
+    const lines = rows.map((h) => {
+      const amt = formatAmount(h.amount, h.decimals);
+      return `${h.mint}  ${amt}`;
+    });
+    return ok(lines.join("\n"));
   },
 
   async follow(args: unknown, d: McpDeps): Promise<Mcp> {
@@ -139,11 +149,13 @@ export const handlers = {
 
   async cashout(args: unknown, d: McpDeps): Promise<Mcp> {
     const parsed = cashoutInput.parse(args);
-    if (!d.cashout) return ok("cashout not configured on this MCP server.");
-    const lamports = BigInt(Math.round(parsed.sol * 1e9));
-    const res = await d.cashout({ tgId: d.tgId, recipient: parsed.recipient, lamports });
-    if (!res.ok) return ok(`cashout failed: ${res.error}`);
-    return ok(`unshielded ${parsed.sol} SOL to ${parsed.recipient}\nsig: ${res.txSignature}\nno on-chain link to your deposit address.`);
+    if (!d.wallet) return ok("wallet backend not configured.");
+    try {
+      const res = await d.wallet.cashout({ tgId: d.tgId, recipient: parsed.recipient });
+      return ok(`unshielded to ${parsed.recipient}\nsig: ${res.txSignature}\nno on-chain link to your deposit address.`);
+    } catch (e) {
+      return ok(`cashout failed: ${(e as Error).message}`);
+    }
   },
 
   async discover_leaders(args: unknown, d: McpDeps): Promise<Mcp> {

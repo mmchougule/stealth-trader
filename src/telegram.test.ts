@@ -197,6 +197,106 @@ describe("telegram /start /wallet /balance", () => {
   });
 });
 
+describe("telegram /holdings", () => {
+  it("returns 'no shielded holdings' on empty", async () => {
+    const pool = new MemPool();
+    const handlers = makeTelegramHandlers({
+      pool: pool as unknown as never,
+      authorizedTgUsers: new Set([1]),
+      resolvePubkey: (id) => `pk-${id}`,
+      wallet: { async getHoldings() { return []; }, async cashout() { return { txSignature: "" }; } },
+    });
+    const c = ctx(1, "/holdings");
+    await handlers.holdings(c);
+    expect(c.replies[0]).toMatch(/no shielded holdings/);
+  });
+
+  it("lists each mint with formatted amount", async () => {
+    const pool = new MemPool();
+    const handlers = makeTelegramHandlers({
+      pool: pool as unknown as never,
+      authorizedTgUsers: new Set([1]),
+      resolvePubkey: (id) => `pk-${id}`,
+      wallet: {
+        async getHoldings() {
+          return [
+            { mint: "AAA1234567890XYZ", amount: "12345678", decimals: 6 },
+          ];
+        },
+        async cashout() { return { txSignature: "" }; },
+      },
+    });
+    const c = ctx(1, "/holdings");
+    await handlers.holdings(c);
+    expect(c.replies[0]).toContain("12.345678");
+  });
+
+  it("returns 'not configured' when wallet dep is absent", async () => {
+    const pool = new MemPool();
+    const handlers = makeTelegramHandlers({
+      pool: pool as unknown as never, authorizedTgUsers: new Set([1]), resolvePubkey: (id) => `pk-${id}`,
+    });
+    const c = ctx(1, "/holdings");
+    await handlers.holdings(c);
+    expect(c.replies[0]).toMatch(/wallet backend not configured/);
+  });
+});
+
+describe("telegram /cashout", () => {
+  it("rejects bad arg counts with usage", async () => {
+    const pool = new MemPool();
+    const handlers = makeTelegramHandlers({
+      pool: pool as unknown as never, authorizedTgUsers: new Set([1]), resolvePubkey: (id) => `pk-${id}`,
+      wallet: { async getHoldings() { return []; }, async cashout() { return { txSignature: "" }; } },
+    });
+    const c = ctx(1, "/cashout");
+    await handlers.cashout(c);
+    expect(c.replies[0]).toMatch(/usage:/);
+  });
+
+  it("rejects non-base58 recipient", async () => {
+    const pool = new MemPool();
+    const handlers = makeTelegramHandlers({
+      pool: pool as unknown as never, authorizedTgUsers: new Set([1]), resolvePubkey: (id) => `pk-${id}`,
+      wallet: { async getHoldings() { return []; }, async cashout() { return { txSignature: "" }; } },
+    });
+    const c = ctx(1, "/cashout not-a-wallet!");
+    await handlers.cashout(c);
+    expect(c.replies[0]).toMatch(/invalid recipient/);
+  });
+
+  it("calls wallet.cashout and reports the signature", async () => {
+    let captured: { tgId: number; recipient: string; mint?: string } | null = null;
+    const pool = new MemPool();
+    const handlers = makeTelegramHandlers({
+      pool: pool as unknown as never, authorizedTgUsers: new Set([1]), resolvePubkey: (id) => `pk-${id}`,
+      wallet: {
+        async getHoldings() { return []; },
+        async cashout(args) { captured = args; return { txSignature: "sig-abc" }; },
+      },
+    });
+    const c = ctx(1, "/cashout 8Sn7Z9wXSp7sH8GJk73Lp9wXSp7sH8GJk73Lp9wXSp77");
+    await handlers.cashout(c);
+    expect(c.replies[0]).toMatch(/unshielded/);
+    expect(c.replies[0]).toMatch(/sig-abc/);
+    expect(captured!.recipient).toBe("8Sn7Z9wXSp7sH8GJk73Lp9wXSp7sH8GJk73Lp9wXSp77");
+  });
+
+  it("surfaces backend errors verbatim", async () => {
+    const pool = new MemPool();
+    const handlers = makeTelegramHandlers({
+      pool: pool as unknown as never, authorizedTgUsers: new Set([1]), resolvePubkey: (id) => `pk-${id}`,
+      wallet: {
+        async getHoldings() { return []; },
+        async cashout() { throw new Error("no shielded wSOL to spend"); },
+      },
+    });
+    const c = ctx(1, "/cashout 8Sn7Z9wXSp7sH8GJk73Lp9wXSp7sH8GJk73Lp9wXSp77");
+    await handlers.cashout(c);
+    expect(c.replies[0]).toMatch(/no shielded wSOL to spend/);
+  });
+});
+
 describe("telegram /unfollow", () => {
   it("flips active=false and reports success", async () => {
     const pool = new MemPool();

@@ -75,14 +75,14 @@ async function main() {
   const pool = getPool();
   const masterSeed = parseMasterSeed(masterSeedHex);
   const backend = makeB402Backend({
-    masterSeed, rpcUrl, cluster,
+    masterSeed, rpcUrl, cluster, pool,
     ...(process.env.B402_RELAYER_URL ? { relayerUrl: process.env.B402_RELAYER_URL } : {}),
   });
   const balance = makeBalanceStore(pool);
   const trade = makeTrade({ backend, balance });
 
   const deps: McpDeps = {
-    pool, tgId, resolvePubkey: (id) => userPubkey(id, masterSeed), trade,
+    pool, tgId, resolvePubkey: (id) => userPubkey(id, masterSeed), trade, wallet: backend,
   };
 
   const server = new Server(
