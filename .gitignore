@@ -1,0 +1,30 @@
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Build / deps
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Local databases
+*.db
+*.db-journal
+*.sqlite
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# Local config
+*.local.json

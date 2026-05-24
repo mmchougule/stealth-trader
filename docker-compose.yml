@@ -1,0 +1,47 @@
+# stealth-trader: minimum services to run the bot locally.
+#
+#   docker compose up -d postgres        # just the DB (recommended for `pnpm dev`)
+#   docker compose up                    # DB + bot
+#
+# The bot reads ./.env. Generate it with `pnpm setup`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: stealth-trader-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stealth_trader
+    ports:
+      - "5432:5432"
+    volumes:
+      - stealth-trader-pgdata:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  bot:
+    image: node:20-alpine
+    container_name: stealth-trader-bot
+    restart: unless-stopped
+    working_dir: /app
+    command: ["sh", "-c", "corepack enable && pnpm install --frozen-lockfile && pnpm start"]
+    environment:
+      NODE_OPTIONS: --dns-result-order=ipv4first
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - bot
+
+volumes:
+  stealth-trader-pgdata:

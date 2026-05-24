@@ -1,0 +1,60 @@
+{
+  "name": "stealth-trader",
+  "version": "0.1.0",
+  "description": "Copy-trade Solana leaders. Your wallet stays off-chain.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "dist/bot.js",
+  "bin": {
+    "stealth-trader": "dist/cli.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/bot.ts",
+    "start": "tsx src/bot.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "setup": "tsx src/setup/index.ts"
+  },
+  "dependencies": {
+    "@b402ai/solana": "^0.0.33",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.0",
+    "bs58": "^6.0.0",
+    "dotenv": "^16.4.7",
+    "grammy": "^1.32.0",
+    "pg": "^8.20.0",
+    "pino": "^9.5.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.20.0",
+    "@types/prompts": "^2.4.9",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.5"
+  },
+  "files": [
+    "dist",
+    "sql",
+    "docker-compose.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "solana",
+    "copy-trading",
+    "privacy",
+    "shielded-pool",
+    "telegram-bot",
+    "defi",
+    "zk-snark",
+    "b402"
+  ]
+}
