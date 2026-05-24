@@ -89,7 +89,11 @@ The full test suite (parse-swap, dust-filter, setup validators) runs in under 20
 
 ## Status
 
-The hosted bot (private deployment) has been running on Solana mainnet since 2026-05-23. The public OSS build in this repo is `v0.1.0` — initial cut, untested by anyone except the authors. Issues and PRs are welcome.
+v0.1.0 — initial cut. The full pipeline is in: Helius webhook receiver, parse-swap, dust filter, copy-trade orchestrator (dedup + daily budget + per-user serial lock), trade execution skeleton with debit-before-send + refund-on-failure, Telegram command surface (/follow, /follows, /unfollow), single-webhook reconciler with adopt/update/dedupe semantics.
+
+The b402 SDK swap backend is wired through a `SwapBackend` interface but the concrete implementation is stubbed in v0.1 (`stubSwapBackend` in `bot.ts`). The stub logs the call and returns an error — you can run the bot end-to-end, /follow a wallet, see Helius events arrive, watch them flow through parseSwap and the dust filter, and observe the orchestrator skip/log decisions, all without real SOL leaving an account. The SDK integration lands in v0.2.
+
+82/82 unit tests pass. None of them touch the network or a real database.
 
 ## Security
 

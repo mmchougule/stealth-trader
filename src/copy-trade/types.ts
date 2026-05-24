@@ -76,3 +76,14 @@ export interface CopyOutcome {
   followerSig?: string;
   reason?: string;
 }
+
+// Re-export the FollowStore interface so callers can import it from
+// either `./types` or `./execute`. Kept here so `src/follows.ts` doesn't
+// have to deep-import from `./copy-trade/execute`.
+export interface FollowStore {
+  activeForLeader(leader: string): Promise<Follow[]>;
+  alreadyLogged(followId: number, leaderSig: string): Promise<boolean>;
+  insertLog(row: CopyOutcome): Promise<void>;
+  dailySpent(followId: number): Promise<bigint>;
+  dailyBudget(followId: number): Promise<bigint>;
+}
