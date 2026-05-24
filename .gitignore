@@ -28,3 +28,6 @@ coverage/
 
 # Local config
 *.local.json
+
+# Internal working docs — never ship in public repo
+docs/internal/

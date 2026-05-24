@@ -20,6 +20,8 @@ export interface Config {
   logLevel: string;
   /** Dust threshold override in lamports; default 2,000,000. */
   dustMinLamports: bigint | null;
+  /** 32-byte hex root of trust. Required — derives every user's keypair. */
+  masterSeedHex: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -35,6 +37,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     relayerUrl: optional(env, "B402_RELAYER_URL"),
     logLevel: env.LOG_LEVEL ?? "info",
     dustMinLamports: parseBigintOpt(env.DUST_MIN_LAMPORTS),
+    masterSeedHex: required(env, "MASTER_SEED"),
   };
 }
 

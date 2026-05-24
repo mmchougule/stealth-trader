@@ -17,9 +17,20 @@ class MemPool {
   rows = new Map<string, Array<Record<string, unknown>>>();
   calls: Array<{ sql: string; params?: unknown[] }> = [];
 
+  users = new Map<number, { tg_id: number; solana_pubkey?: string; sol_balance_lamports?: bigint }>();
   async query(sql: string, params?: unknown[]) {
     this.calls.push({ sql, params });
+    if (/SELECT sol_balance_lamports FROM stealth.users/.test(sql)) {
+      const u = this.users.get(params![0] as number);
+      if (!u) return { rowCount: 0, rows: [] };
+      return { rowCount: 1, rows: [{ sol_balance_lamports: (u.sol_balance_lamports ?? 0n).toString() }] };
+    }
     if (/INSERT INTO stealth.users/.test(sql)) {
+      const tg = params![0] as number;
+      const pk = params?.[1] as string | undefined;
+      const cur = this.users.get(tg) ?? { tg_id: tg };
+      if (pk) cur.solana_pubkey = pk;
+      this.users.set(tg, cur);
       return { rowCount: 1, rows: [] };
     }
     if (/INSERT INTO stealth.follows/.test(sql)) {
@@ -70,7 +81,7 @@ describe("telegram /follow", () => {
 
   beforeEach(() => {
     pool = new MemPool();
-    handlers = makeTelegramHandlers({ pool: pool as unknown as never, authorizedTgUsers: new Set([1]) });
+    handlers = makeTelegramHandlers({ pool: pool as unknown as never, authorizedTgUsers: new Set([1]), resolvePubkey: (id) => `pk-${id}` });
   });
 
   it("rejects unauthorized users without DB writes", async () => {
@@ -124,7 +135,7 @@ describe("telegram /follows", () => {
       { id: 1, follower_tg: 1, leader_wallet: "AAA1234567890XYZ", per_trade_lamports: "5000000", active: true },
       { id: 2, follower_tg: 2, leader_wallet: "BBB1234567890XYZ", per_trade_lamports: "5000000", active: true },
     ]);
-    const handlers = makeTelegramHandlers({ pool: pool as unknown as never, authorizedTgUsers: new Set([1, 2]) });
+    const handlers = makeTelegramHandlers({ pool: pool as unknown as never, authorizedTgUsers: new Set([1, 2]), resolvePubkey: (id) => `pk-${id}` });
     const c1 = ctx(1, "/follows");
     await handlers.follows(c1);
     expect(c1.replies[0]).toMatch(/AAA123/);
@@ -133,10 +144,56 @@ describe("telegram /follows", () => {
 
   it("informs an empty list state", async () => {
     const pool = new MemPool();
-    const handlers = makeTelegramHandlers({ pool: pool as unknown as never, authorizedTgUsers: new Set([1]) });
+    const handlers = makeTelegramHandlers({ pool: pool as unknown as never, authorizedTgUsers: new Set([1]), resolvePubkey: (id) => `pk-${id}` });
     const c = ctx(1, "/follows");
     await handlers.follows(c);
     expect(c.replies[0]).toMatch(/no active follows/);
+  });
+});
+
+describe("telegram /start /wallet /balance", () => {
+  let pool: MemPool;
+  let handlers: ReturnType<typeof makeTelegramHandlers>;
+  beforeEach(() => {
+    pool = new MemPool();
+    handlers = makeTelegramHandlers({
+      pool: pool as unknown as never,
+      authorizedTgUsers: new Set([1]),
+      resolvePubkey: (id) => `WALLET${id}`,
+    });
+  });
+
+  it("/start prints the deposit address and upserts the user row", async () => {
+    const c = ctx(1, "/start");
+    await handlers.start(c);
+    expect(c.replies[0]).toContain("WALLET1");
+    const u = pool.users.get(1);
+    expect(u?.solana_pubkey).toBe("WALLET1");
+  });
+
+  it("/wallet returns just the address", async () => {
+    const c = ctx(1, "/wallet");
+    await handlers.wallet(c);
+    expect(c.replies[0]).toBe("WALLET1");
+  });
+
+  it("/balance shows 0 SOL when the user has no row yet", async () => {
+    const c = ctx(1, "/balance");
+    await handlers.balance(c);
+    expect(c.replies[0]).toMatch(/^0\.0000 SOL/);
+  });
+
+  it("/balance shows the current balance", async () => {
+    pool.users.set(1, { tg_id: 1, sol_balance_lamports: 1_234_567_890n });
+    const c = ctx(1, "/balance");
+    await handlers.balance(c);
+    expect(c.replies[0]).toMatch(/^1\.2346 SOL/);
+  });
+
+  it("unauthorized users never see the deposit address", async () => {
+    const c = ctx(999, "/start");
+    await handlers.start(c);
+    expect(c.replies[0]).toBe("not authorized");
   });
 });
 
@@ -146,7 +203,7 @@ describe("telegram /unfollow", () => {
     pool.rows.set("follows", [
       { id: 1, follower_tg: 1, leader_wallet: "AAAwallet", per_trade_lamports: "5000000", active: true },
     ]);
-    const handlers = makeTelegramHandlers({ pool: pool as unknown as never, authorizedTgUsers: new Set([1]) });
+    const handlers = makeTelegramHandlers({ pool: pool as unknown as never, authorizedTgUsers: new Set([1]), resolvePubkey: (id) => `pk-${id}` });
     const c = ctx(1, "/unfollow AAAwallet");
     await handlers.unfollow(c);
     expect(c.replies[0]).toMatch(/stopped copying/);
@@ -156,7 +213,7 @@ describe("telegram /unfollow", () => {
 
   it("returns a clear message for a wallet that isn't followed", async () => {
     const pool = new MemPool();
-    const handlers = makeTelegramHandlers({ pool: pool as unknown as never, authorizedTgUsers: new Set([1]) });
+    const handlers = makeTelegramHandlers({ pool: pool as unknown as never, authorizedTgUsers: new Set([1]), resolvePubkey: (id) => `pk-${id}` });
     const c = ctx(1, "/unfollow NotMineWallet");
     await handlers.unfollow(c);
     expect(c.replies[0]).toMatch(/no active follow/);

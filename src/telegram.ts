@@ -29,22 +29,63 @@ export interface CommandCtx {
 export interface TelegramDeps {
   pool: Pool;
   authorizedTgUsers: ReadonlySet<number>;
+  /** Returns the user's derived Solana public address (base58). Injected
+   *  so tests don't need to import the wallet derivation chain. */
+  resolvePubkey(tgId: number): string;
 }
 
 export function makeTelegramHandlers(deps: TelegramDeps) {
   return {
     async start(ctx: CommandCtx) {
       if (!check(deps, ctx)) return;
+      // Ensure user row exists and we know their derived pubkey.
+      const pubkey = deps.resolvePubkey(ctx.tgId);
+      await deps.pool.query(
+        `INSERT INTO stealth.users (tg_id, solana_pubkey) VALUES ($1, $2)
+         ON CONFLICT (tg_id) DO UPDATE SET solana_pubkey = EXCLUDED.solana_pubkey`,
+        [ctx.tgId, pubkey],
+      );
       await ctx.reply(
         [
-          "stealth-trader is running.",
+          "stealth-trader is ready.",
           "",
-          "/follow <wallet> <sol>   start copying a leader",
-          "/follows                  list your active follows",
-          "/unfollow <wallet>        stop copying a leader",
-          "/help                     show this list",
+          `your deposit address:`,
+          pubkey,
+          "",
+          `send SOL there, then:`,
+          `  /balance                  show your SOL`,
+          `  /follow <wallet> <sol>    start copying a leader`,
+          `  /follows                  list active follows`,
+          `  /unfollow <wallet>        stop copying a leader`,
+          `  /holdings                 show shielded tokens`,
+          `  /wallet                   show your deposit address`,
         ].join("\n"),
       );
+    },
+
+    async wallet(ctx: CommandCtx) {
+      if (!check(deps, ctx)) return;
+      await ctx.reply(deps.resolvePubkey(ctx.tgId));
+    },
+
+    async balance(ctx: CommandCtx) {
+      if (!check(deps, ctx)) return;
+      const r = await deps.pool.query(
+        `SELECT sol_balance_lamports FROM stealth.users WHERE tg_id = $1`,
+        [ctx.tgId],
+      );
+      const lamports = r.rowCount && r.rowCount > 0 ? BigInt(r.rows[0].sol_balance_lamports) : 0n;
+      const sol = (Number(lamports) / Number(SOL)).toFixed(4);
+      await ctx.reply(`${sol} SOL  (${lamports.toString()} lamports)`);
+    },
+
+    async holdings(ctx: CommandCtx) {
+      if (!check(deps, ctx)) return;
+      // Shielded holdings live in the SDK's NoteStore, which is bot-process
+      // memory + Postgres (via the wider SDK persistence layer). v0.2
+      // ships the public-balance side; reading shielded balance per-user
+      // lands in v0.3 once we wire the SDK persistence adapter in.
+      await ctx.reply("holdings view ships in v0.3. for now, see /balance for public SOL.");
     },
 
     async follow(ctx: CommandCtx) {

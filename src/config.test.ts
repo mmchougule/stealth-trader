@@ -7,6 +7,7 @@ const base: NodeJS.ProcessEnv = {
   HELIUS_RPC_URL: "https://example.test/?api-key=x",
   HELIUS_WEBHOOK_SECRET: "deadbeef",
   DATABASE_URL: "postgres://localhost/test",
+  MASTER_SEED: "deadbeef".repeat(8),
 };
 
 describe("loadConfig", () => {
