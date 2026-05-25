@@ -1,6 +1,6 @@
 {
-  "name": "stealth-trader",
-  "version": "0.3.0",
+  "name": "@b402ai/stealth-trader",
+  "version": "0.4.0",
   "description": "Private copy-trading for Solana. /follow a wallet; every mirrored trade lands in a shielded note signed by a relayer, not your wallet.",
   "type": "module",
   "license": "Apache-2.0",
@@ -66,5 +66,8 @@
     "defi",
     "zk-snark",
     "b402"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
