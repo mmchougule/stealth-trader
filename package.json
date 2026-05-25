@@ -1,7 +1,7 @@
 {
   "name": "@b402ai/stealth-trader",
   "version": "0.4.0",
-  "description": "Private copy-trading for Solana. /follow a wallet; every mirrored trade lands in a shielded note signed by a relayer, not your wallet.",
+  "description": "Buy, copy-trade, and cash out on Solana without your wallet showing up in the tx. MCP server + Telegram bot + TypeScript SDK.",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {
@@ -59,15 +59,28 @@
   ],
   "keywords": [
     "solana",
-    "copy-trading",
+    "mcp",
+    "agent",
     "privacy",
     "shielded-pool",
+    "copy-trading",
     "telegram-bot",
     "defi",
     "zk-snark",
-    "b402"
+    "b402",
+    "jupiter",
+    "kamino"
   ],
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mmchougule/stealth-trader.git"
+  },
+  "homepage": "https://github.com/mmchougule/stealth-trader",
+  "bugs": {
+    "url": "https://github.com/mmchougule/stealth-trader/issues"
+  },
+  "author": "mmchougule"
 }
