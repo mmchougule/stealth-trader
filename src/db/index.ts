@@ -90,8 +90,32 @@ export async function applySchema(pool: DbPool, sqlDir: string): Promise<void> {
     const file = path.join(sqlDir, f);
     if (!fs.existsSync(file)) continue;
     const sql = fs.readFileSync(file, "utf8");
-    await pool.query(sql);
+    // pglite requires one statement per prepared call. Postgres also
+    // tolerates this — splitting is universal.
+    for (const stmt of splitSql(sql)) {
+      await pool.query(stmt);
+    }
   }
+}
+
+/**
+ * Split a SQL file into individual statements, skipping comments and
+ * empty trailing chunks. Handles:
+ *   - line comments (`-- …`)
+ *   - whitespace-only tail after the last `;`
+ * Does NOT try to be a full SQL parser — our migrations are
+ * straightforward DDL, no DO $$ blocks, no plpgsql function bodies. If
+ * we add those later, switch to a real splitter (e.g. pg-query-emscripten).
+ */
+function splitSql(sql: string): string[] {
+  const noComments = sql
+    .split("\n")
+    .map((line) => line.replace(/--.*$/, ""))
+    .join("\n");
+  return noComments
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 /** withTx: run `fn` inside BEGIN/COMMIT, ROLLBACK on throw. Works on both

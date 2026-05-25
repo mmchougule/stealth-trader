@@ -11,9 +11,15 @@ importers:
       '@b402ai/solana':
         specifier: ^0.0.33
         version: 0.0.33(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@b402ai/solana-shared':
+        specifier: 0.0.3
+        version: 0.0.3
       '@electric-sql/pglite':
         specifier: ^0.4.5
         version: 0.4.5
+      '@lightprotocol/stateless.js':
+        specifier: 0.23.0-beta.5
+        version: 0.23.0-beta.5(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@3.25.76)

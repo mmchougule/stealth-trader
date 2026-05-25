@@ -48,14 +48,16 @@
  * it post-hoc.
  */
 import "dotenv/config";
+import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
-import { Pool } from "pg";
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { parseMasterSeed, deriveUserKeypair } from "../src/wallet.js";
 import { makeB402Backend, userPubkey } from "../src/b402-backend.js";
 import { makeBalanceStore } from "../src/balance.js";
 import { makeTrade } from "../src/trade.js";
+import { getPool, applySchema, type DbPool } from "../src/db/index.js";
 
 const USDC_MAINNET = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
@@ -69,6 +71,7 @@ interface Summary {
   buyTx?: string;
   buyTokensReceived?: string;
   holdingsBeforeCashout: Array<{ mint: string; amount: string; decimals: number }>;
+  lendTx?: string;
   cashoutTx?: string;
   ok: boolean;
   failedAt?: string;
@@ -104,15 +107,6 @@ function writeSummary() {
   console.log(`summary: ${file}`);
 }
 
-async function applySchema(pool: Pool, sqlDir: string): Promise<void> {
-  for (const f of ["001_init.sql", "002_balances.sql", "003_notes.sql"]) {
-    const sql = fs.readFileSync(path.join(sqlDir, f), "utf8");
-    await pool.query(sql);
-    // eslint-disable-next-line no-console
-    console.log(`  applied ${f}`);
-  }
-}
-
 async function waitForBalance(conn: Connection, pubkey: PublicKey, minLamports: bigint, timeoutMs: number): Promise<bigint> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -123,20 +117,87 @@ async function waitForBalance(conn: Connection, pubkey: PublicKey, minLamports: 
   throw new Error(`balance did not reach ${minLamports} within ${timeoutMs}ms`);
 }
 
+/**
+ * Generate a MASTER_SEED into ./.env if one isn't already in env. Returns the
+ * hex seed. Idempotent — if .env already has MASTER_SEED, the dotenv import
+ * at the top of this file already populated process.env and we return early.
+ *
+ * Set STEALTH_NO_AUTOSEED=1 to opt out (e.g. in CI where you want the
+ * "MASTER_SEED required" error instead of a fresh seed).
+ */
+function ensureMasterSeed(): string {
+  if (process.env.MASTER_SEED) return process.env.MASTER_SEED;
+  if (process.env.STEALTH_NO_AUTOSEED === "1") {
+    throw new Error("MASTER_SEED required (STEALTH_NO_AUTOSEED=1 set)");
+  }
+  const seed = crypto.randomBytes(32).toString("hex");
+  const envPath = path.resolve(process.cwd(), ".env");
+  const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
+  const sep = existing === "" || existing.endsWith("\n") ? "" : "\n";
+  fs.writeFileSync(envPath, `${existing}${sep}MASTER_SEED=${seed}\n`);
+  process.env.MASTER_SEED = seed;
+  // eslint-disable-next-line no-console
+  console.log("[seed] generated new MASTER_SEED, saved to ./.env");
+  // eslint-disable-next-line no-console
+  console.log("       this is your root of trust — back it up before depositing real funds");
+  return seed;
+}
+
+/**
+ * Try to auto-fund `recipient` to `minLamports` from the Solana CLI keypair
+ * (`~/.config/solana/id.json`). Returns the new balance on success, or null
+ * if auto-fund was skipped (no CLI keypair, insufficient CLI balance, or
+ * STEALTH_NO_AUTOFUND=1). On failure we fall through to the manual-wait path.
+ */
+async function maybeAutoFund(
+  conn: Connection,
+  recipient: PublicKey,
+  current: bigint,
+  needed: bigint,
+): Promise<bigint | null> {
+  if (current >= needed) return current;
+  if (process.env.STEALTH_NO_AUTOFUND === "1") return null;
+  const cliPath = process.env.SOLANA_KEYPAIR_PATH
+    ?? path.join(os.homedir(), ".config", "solana", "id.json");
+  if (!fs.existsSync(cliPath)) return null;
+  const cliKp = Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(fs.readFileSync(cliPath, "utf8")) as number[]),
+  );
+  const cliBalance = BigInt(await conn.getBalance(cliKp.publicKey));
+  const transferAmount = needed - current;
+  // Keep 0.01 SOL in the CLI wallet so tx fees + operator-rent ops still work.
+  const cliReserve = 10_000_000n;
+  if (cliBalance < transferAmount + cliReserve) {
+    // eslint-disable-next-line no-console
+    console.log(`[fund] CLI wallet too low to auto-fund (have ${cliBalance}, need ${transferAmount + cliReserve}); waiting for manual top-up`);
+    return null;
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[fund] auto-funding ${transferAmount} lamports from ${cliKp.publicKey.toBase58()}`);
+  const tx = new Transaction().add(SystemProgram.transfer({
+    fromPubkey: cliKp.publicKey,
+    toPubkey: recipient,
+    lamports: Number(transferAmount),
+  }));
+  const sig = await sendAndConfirmTransaction(conn, tx, [cliKp], { commitment: "confirmed" });
+  // eslint-disable-next-line no-console
+  console.log(`[fund] tx ${sig}`);
+  return BigInt(await conn.getBalance(recipient));
+}
+
 async function main() {
   // ─── 0. Env + connections ──────────────────────────────────────────────
   // eslint-disable-next-line no-console
   console.log(`[stealth-trader smoke] starting on ${summary.cluster}`);
-  const masterSeedHex = process.env.MASTER_SEED;
+  let masterSeedHex: string;
+  try { masterSeedHex = ensureMasterSeed(); } catch (e) { fail("env", e, 1); }
   const rpcUrl = process.env.HELIUS_RPC_URL;
-  const databaseUrl = process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/stealth_trader";
-  if (!masterSeedHex) fail("env", new Error("MASTER_SEED required"), 1);
-  if (!rpcUrl) fail("env", new Error("HELIUS_RPC_URL required"), 1);
+  if (!rpcUrl) fail("env", new Error("HELIUS_RPC_URL required (free key at https://helius.xyz)"), 1);
 
   const masterSeed = parseMasterSeed(masterSeedHex!);
   const cluster = summary.cluster as "mainnet" | "devnet" | "localnet";
   const conn = new Connection(rpcUrl!, "confirmed");
-  const pool = new Pool({ connectionString: databaseUrl });
+  const pool: DbPool = await getPool();
   const sqlDir = path.resolve(process.cwd(), "sql");
 
   // ─── 1. Schema ─────────────────────────────────────────────────────────
@@ -150,39 +211,59 @@ async function main() {
   // eslint-disable-next-line no-console
   console.log(`[2] test user tg=${summary.testTgId}  address=${userAddress}`);
 
-  // Recipient: random ephemeral keypair so cashout's destination has no
-  // history. We don't persist its secret; we don't need it after this run.
-  const recipientKp = process.env.TEST_RECIPIENT
-    ? null
-    : Keypair.generate();
-  const recipientPubkey = process.env.TEST_RECIPIENT
-    ? new PublicKey(process.env.TEST_RECIPIENT)
-    : recipientKp!.publicKey;
+  // Recipient: default to the operator's Solana CLI keypair if present.
+  // That wallet already has a USDC ATA from prior activity, so the cashout
+  // pays zero ATA-creation rent. The privacy claim (depositor absent from
+  // cashout tx accountKeys) holds regardless of who the recipient is.
+  // Falls back to a deterministic seed-derived address if no CLI keypair
+  // is found. Override with TEST_RECIPIENT to point at a fresh wallet.
+  const RECIPIENT_TG_ID = Number(process.env.TEST_RECIPIENT_TG_ID ?? "999000999");
+  const cliRecipientPath = process.env.SOLANA_KEYPAIR_PATH
+    ?? path.join(os.homedir(), ".config", "solana", "id.json");
+  let recipientPubkey: PublicKey;
+  if (process.env.TEST_RECIPIENT) {
+    recipientPubkey = new PublicKey(process.env.TEST_RECIPIENT);
+  } else if (fs.existsSync(cliRecipientPath)) {
+    const raw = JSON.parse(fs.readFileSync(cliRecipientPath, "utf8")) as number[];
+    recipientPubkey = Keypair.fromSecretKey(Uint8Array.from(raw)).publicKey;
+  } else {
+    recipientPubkey = deriveUserKeypair(RECIPIENT_TG_ID, masterSeed).publicKey;
+  }
   summary.recipientAddress = recipientPubkey.toBase58();
   // eslint-disable-next-line no-console
   console.log(`    recipient (cashout dest) = ${recipientPubkey.toBase58()}`);
 
   // ─── 3. Fund + wait ────────────────────────────────────────────────────
   const amountSol = Number(process.env.TEST_AMOUNT_SOL ?? "0.0015");
-  const minLamports = BigInt(Math.round(amountSol * LAMPORTS_PER_SOL)) + 1_000_000n; // include rent + fee headroom
+  // Headroom covers (one-time) wSOL ATA rent ~2_039_280 + a few tx fees.
+  // The ATA is idempotent — only the first buy pays rent — but the smoke
+  // always runs against a fresh address, so we always need it.
+  const minLamports = BigInt(Math.round(amountSol * LAMPORTS_PER_SOL)) + 3_000_000n;
   const skipBuy = process.env.SKIP_BUY === "1";
   if (!skipBuy) {
-    const currentLamports = BigInt(await conn.getBalance(new PublicKey(userAddress)));
-    if (currentLamports < minLamports) {
-      // eslint-disable-next-line no-console
-      console.log(`[3] insufficient SOL at ${userAddress} (${currentLamports} < ${minLamports}).`);
-      // eslint-disable-next-line no-console
-      console.log(`    fund ${userAddress} with at least ${Number(minLamports) / LAMPORTS_PER_SOL} SOL on ${cluster}.`);
-      // eslint-disable-next-line no-console
-      console.log(`    waiting up to 5 minutes…`);
-      try {
-        const got = await waitForBalance(conn, new PublicKey(userAddress), minLamports, 5 * 60 * 1000);
-        // eslint-disable-next-line no-console
-        console.log(`    funded: ${got} lamports`);
-      } catch (e) { fail("funding", e, 2); }
-    } else {
+    const userPk = new PublicKey(userAddress);
+    const currentLamports = BigInt(await conn.getBalance(userPk));
+    if (currentLamports >= minLamports) {
       // eslint-disable-next-line no-console
       console.log(`[3] already funded: ${currentLamports} lamports`);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(`[3] need ${minLamports} lamports at ${userAddress} (have ${currentLamports})`);
+      const autoFunded = await maybeAutoFund(conn, userPk, currentLamports, minLamports);
+      if (autoFunded !== null) {
+        // eslint-disable-next-line no-console
+        console.log(`    funded: ${autoFunded} lamports`);
+      } else {
+        // eslint-disable-next-line no-console
+        console.log(`    fund ${userAddress} with at least ${Number(minLamports) / LAMPORTS_PER_SOL} SOL on ${cluster}.`);
+        // eslint-disable-next-line no-console
+        console.log(`    waiting up to 5 minutes…`);
+        try {
+          const got = await waitForBalance(conn, userPk, minLamports, 5 * 60 * 1000);
+          // eslint-disable-next-line no-console
+          console.log(`    funded: ${got} lamports`);
+        } catch (e) { fail("funding", e, 2); }
+      }
     }
   } else {
     // eslint-disable-next-line no-console
@@ -190,9 +271,23 @@ async function main() {
   }
 
   // ─── 4. Backend ─────────────────────────────────────────────────────────
+  // Operator keypair pays one-time recipient ATA rent. Default to the
+  // Solana CLI keypair (which is the same wallet that funded the user
+  // address — assumed to have spare SOL). Override with
+  // OPERATOR_FEE_KEYPAIR_PATH.
+  const operatorPath = process.env.OPERATOR_FEE_KEYPAIR_PATH
+    ?? path.join(os.homedir(), ".config", "solana", "id.json");
+  let operatorFeeKeypair: Keypair | undefined;
+  if (fs.existsSync(operatorPath)) {
+    const raw = JSON.parse(fs.readFileSync(operatorPath, "utf8")) as number[];
+    operatorFeeKeypair = Keypair.fromSecretKey(Uint8Array.from(raw));
+    // eslint-disable-next-line no-console
+    console.log(`    operator fee payer: ${operatorFeeKeypair.publicKey.toBase58()}`);
+  }
   const backend = makeB402Backend({
     masterSeed, rpcUrl: rpcUrl!, cluster, pool,
     ...(process.env.B402_RELAYER_URL ? { relayerUrl: process.env.B402_RELAYER_URL } : {}),
+    ...(operatorFeeKeypair ? { operatorFeeKeypair } : {}),
   });
   const balance = makeBalanceStore(pool);
   const trade = makeTrade({ backend, balance });
@@ -236,6 +331,39 @@ async function main() {
     }
   } catch (e) { fail("holdings", e, 4); }
 
+  // ─── 6b. Optional lend ─────────────────────────────────────────────────
+  // Set TEST_LEND=1 to also exercise the Kamino private-lend path. Lends
+  // ~half the just-acquired USDC into the deepest Kamino USDC reserve via
+  // the b402 adapter. Skipped by default — adds a Kamino UserMetadata +
+  // Obligation rent (~0.003 SOL, refundable on close) the first time it
+  // runs for a given (viewing key, mint) pair.
+  const usdcMint = process.env.TEST_MINT ?? USDC_MAINNET;
+  if (process.env.TEST_LEND === "1") {
+    // The b402 adapt circuit consumes exactly one note — the SDK rejects
+    // anything other than an exact match. Pull the per-note list and pick
+    // the largest non-dust note. (Phase 9 dual-note minting means each
+    // buy produces two output notes: one main, one tiny "reblind". We
+    // want the main one.)
+    const notes = (await backend.getNotes(summary.testTgId, usdcMint))
+      .filter((n) => n.amount > 1000n) // filter Phase-9 reblind dust
+      .sort((a, b) => (b.amount > a.amount ? 1 : -1));
+    if (notes.length === 0) fail("lend", new Error("no spendable USDC notes"), 6);
+    const lendAmount = notes[0].amount;
+    // eslint-disable-next-line no-console
+    console.log(`[6b] private lend: ${lendAmount} USDC raw → Kamino`);
+    try {
+      const tLend = Date.now();
+      const res = await backend.lend({
+        tgId: summary.testTgId,
+        mint: usdcMint,
+        amount: lendAmount,
+      });
+      summary.lendTx = res.txSignature;
+      // eslint-disable-next-line no-console
+      console.log(`    ok in ${Date.now() - tLend}ms  tx=${res.txSignature}`);
+    } catch (e) { fail("lend", e, 6); }
+  }
+
   // ─── 7. Cashout ─────────────────────────────────────────────────────────
   const cashoutMint = (process.env.TEST_MINT ?? USDC_MAINNET);
   // eslint-disable-next-line no-console
@@ -256,9 +384,9 @@ async function main() {
     // eslint-disable-next-line no-console
     console.log(`      recipient:  https://solscan.io/account/${summary.recipientAddress}`);
     // eslint-disable-next-line no-console
-    console.log(`      mirror tx:  https://solscan.io/tx/${res.txSignature}`);
+    console.log(`      cashout tx: https://solscan.io/tx/${res.txSignature}`);
     // eslint-disable-next-line no-console
-    console.log(`      open both account pages — depositor will not appear in the mirror tx's accountKeys.`);
+    console.log(`      open both account pages — depositor address will not appear in the cashout tx's accountKeys.`);
   } catch (e) { fail("cashout", e, 5); }
 
   // ─── 8. Done ────────────────────────────────────────────────────────────

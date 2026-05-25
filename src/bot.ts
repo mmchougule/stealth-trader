@@ -19,10 +19,18 @@
  * no policy decisions. The decisions live in the modules under test.
  */
 import "dotenv/config";
+import fs from "node:fs";
 import http from "node:http";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { Bot } from "grammy";
 import { loadConfig } from "./config.js";
+
+/** Load a Solana CLI-format keypair JSON file (array of 64 bytes). */
+function loadSolanaKeypairFile(p: string): Keypair {
+  const expanded = p.startsWith("~/") ? path.join(process.env.HOME ?? "", p.slice(2)) : p;
+  const raw = JSON.parse(fs.readFileSync(expanded, "utf8")) as number[];
+  return Keypair.fromSecretKey(Uint8Array.from(raw));
+}
 import { log } from "./log.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,6 +58,17 @@ async function main() {
   const masterSeed = parseMasterSeed(cfg.masterSeedHex);
   const resolvePubkey = (tgId: number): string => userPubkey(tgId, masterSeed);
 
+  // Optional operator keypair that pays one-time recipient ATA rent in
+  // /cashout. Loaded from OPERATOR_FEE_KEYPAIR_PATH (same JSON format as
+  // ~/.config/solana/id.json). Without it, fresh-recipient cashouts only
+  // work if the user's derived keypair has spare SOL.
+  const operatorFeeKeypair = cfg.operatorFeeKeypairPath
+    ? loadSolanaKeypairFile(cfg.operatorFeeKeypairPath)
+    : undefined;
+  if (operatorFeeKeypair) {
+    log.info({ pubkey: operatorFeeKeypair.publicKey.toBase58() }, "operator fee keypair loaded");
+  }
+
   // Backend + trade pipeline.
   const backend = makeB402Backend({
     masterSeed,
@@ -57,6 +76,7 @@ async function main() {
     cluster: cfg.cluster,
     pool,
     ...(cfg.relayerUrl ? { relayerUrl: cfg.relayerUrl } : {}),
+    ...(operatorFeeKeypair ? { operatorFeeKeypair } : {}),
   });
   const balance = makeBalanceStore(pool);
   const trade = makeTrade({ backend, balance });

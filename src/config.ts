@@ -13,7 +13,8 @@ export interface Config {
   heliusRpcUrl: string;
   heliusWebhookSecret: string;
   webhookPublicUrl: string | null;
-  databaseUrl: string;
+  /** Postgres URL OR `pglite:/path` OR null (defaults to ~/.stealth-trader/db). */
+  databaseUrl: string | null;
   cluster: "mainnet" | "devnet" | "localnet";
   solanaKeypairPath: string | null;
   relayerUrl: string | null;
@@ -22,6 +23,12 @@ export interface Config {
   dustMinLamports: bigint | null;
   /** 32-byte hex root of trust. Required — derives every user's keypair. */
   masterSeedHex: string;
+  /** Optional fee-payer keypair file path. When set, the bot pre-creates
+   *  recipient ATAs (~0.002 SOL one-time per address/mint) so /cashout
+   *  to a fresh wallet never fails with "insufficient funds for rent".
+   *  When unset, fresh-recipient cashouts fall through to the SDK's
+   *  user-pays path (works only if the user has spare SOL). */
+  operatorFeeKeypairPath: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -31,13 +38,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     heliusRpcUrl: required(env, "HELIUS_RPC_URL"),
     heliusWebhookSecret: required(env, "HELIUS_WEBHOOK_SECRET"),
     webhookPublicUrl: optional(env, "WEBHOOK_PUBLIC_URL"),
-    databaseUrl: required(env, "DATABASE_URL"),
+    databaseUrl: optional(env, "DATABASE_URL"),
     cluster: parseCluster(env.B402_CLUSTER ?? "mainnet"),
     solanaKeypairPath: optional(env, "SOLANA_KEYPAIR_PATH"),
     relayerUrl: optional(env, "B402_RELAYER_URL"),
     logLevel: env.LOG_LEVEL ?? "info",
     dustMinLamports: parseBigintOpt(env.DUST_MIN_LAMPORTS),
     masterSeedHex: required(env, "MASTER_SEED"),
+    operatorFeeKeypairPath: optional(env, "OPERATOR_FEE_KEYPAIR_PATH"),
   };
 }
 

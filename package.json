@@ -25,7 +25,9 @@
   },
   "dependencies": {
     "@b402ai/solana": "^0.0.33",
+    "@b402ai/solana-shared": "0.0.3",
     "@electric-sql/pglite": "^0.4.5",
+    "@lightprotocol/stateless.js": "0.23.0-beta.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@noble/hashes": "^2.2.0",
     "@solana/spl-token": "^0.4.14",

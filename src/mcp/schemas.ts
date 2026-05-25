@@ -48,6 +48,12 @@ export const cashoutInput = z.object({
   sol: SolFloat,
 }).describe("Unshield `sol` from the shielded pool to `recipient`. The recipient has no on-chain link to the user's deposit address.");
 
+export const privateLendInput = z.object({
+  mint: Wallet,
+  amount: z.string().regex(/^[0-9]+$/, "raw token units, decimal-free integer string")
+    .describe("amount in raw token units (e.g. 1000000 for 1 USDC since USDC has 6 decimals)"),
+}).describe("Lend a previously-shielded token into Kamino. Burns one of the user's shielded notes, mints a voucher note representing the Kamino deposit. The user's wallet doesn't appear in the lend tx. Mainnet only — Kamino isn't on devnet.");
+
 export const discoverLeadersInput = z.object({
   candidates: z.array(Wallet).min(1).max(20)
     .describe("base58 wallets to score"),
@@ -63,4 +69,5 @@ export type UnfollowInput = z.infer<typeof unfollowInput>;
 export type ListFollowsInput = z.infer<typeof listFollowsInput>;
 export type PrivateBuyInput = z.infer<typeof privateBuyInput>;
 export type CashoutInput = z.infer<typeof cashoutInput>;
+export type PrivateLendInput = z.infer<typeof privateLendInput>;
 export type DiscoverLeadersInput = z.infer<typeof discoverLeadersInput>;

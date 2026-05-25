@@ -41,7 +41,7 @@ import { handlers, type McpDeps } from "./handlers.js";
 import {
   getWalletInput, getBalanceInput, getHoldingsInput,
   followInput, unfollowInput, listFollowsInput,
-  privateBuyInput, cashoutInput, discoverLeadersInput,
+  privateBuyInput, cashoutInput, privateLendInput, discoverLeadersInput,
 } from "./schemas.js";
 
 const tools = [
@@ -52,6 +52,7 @@ const tools = [
   { name: "unfollow",          schema: unfollowInput,         handler: handlers.unfollow },
   { name: "list_follows",      schema: listFollowsInput,      handler: handlers.list_follows },
   { name: "private_buy",       schema: privateBuyInput,       handler: handlers.private_buy },
+  { name: "private_lend",      schema: privateLendInput,      handler: handlers.private_lend },
   { name: "cashout",           schema: cashoutInput,          handler: handlers.cashout },
   { name: "discover_leaders",  schema: discoverLeadersInput,  handler: handlers.discover_leaders },
 ] as const;

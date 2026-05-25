@@ -15,7 +15,7 @@ import type { DbPool } from "../db/index.js";
 import {
   followInput, unfollowInput, getWalletInput, getBalanceInput,
   listFollowsInput, privateBuyInput, cashoutInput, getHoldingsInput,
-  discoverLeadersInput,
+  discoverLeadersInput, privateLendInput,
 } from "./schemas.js";
 
 const SOL = 1_000_000_000n;
@@ -40,10 +40,11 @@ export interface McpDeps {
       | { ok: false; error: string }
     >;
   };
-  /** Wallet-side ops (holdings + unshield). Optional so tests can omit. */
+  /** Wallet-side ops (holdings + unshield + lend). Optional so tests can omit. */
   wallet?: {
     getHoldings(tgId: number): Promise<Array<{ mint: string; amount: string; decimals: number }>>;
     cashout(args: { tgId: number; recipient: string; mint?: string }): Promise<{ txSignature: string }>;
+    lend(args: { tgId: number; mint: string; amount: bigint }): Promise<{ txSignature: string }>;
   };
   /** Optional leader scoring. */
   discover?: (args: { candidates: string[]; lookbackHours: number }) => Promise<Array<{ wallet: string; score: number; buys: number; pnlSol: number }>>;
@@ -155,6 +156,18 @@ export const handlers = {
       return ok(`unshielded to ${parsed.recipient}\nsig: ${res.txSignature}\nno on-chain link to your deposit address.`);
     } catch (e) {
       return ok(`cashout failed: ${(e as Error).message}`);
+    }
+  },
+
+  async private_lend(args: unknown, d: McpDeps): Promise<Mcp> {
+    const parsed = privateLendInput.parse(args);
+    if (!d.wallet) return ok("wallet backend not configured.");
+    try {
+      const amount = BigInt(parsed.amount);
+      const res = await d.wallet.lend({ tgId: d.tgId, mint: parsed.mint, amount });
+      return ok(`lent ${parsed.amount} raw units of ${parsed.mint.slice(0, 8)}… into Kamino\nsig: ${res.txSignature}\nvoucher minted as a new shielded note; your wallet doesn't appear in the lend tx.`);
+    } catch (e) {
+      return ok(`lend failed: ${(e as Error).message}`);
     }
   },
 

@@ -188,6 +188,40 @@ describe("cashout", () => {
   });
 });
 
+describe("private_lend", () => {
+  it("returns 'not configured' when wallet dep absent", async () => {
+    const { deps } = makeDeps();
+    const r = await handlers.private_lend({ mint: VALID_MINT, amount: "1000000" }, deps);
+    expect(r.content[0].text).toMatch(/not configured/);
+  });
+
+  it("delegates to wallet.lend with bigint amount", async () => {
+    let captured: { tgId: number; mint: string; amount: bigint } | null = null;
+    const { deps } = makeDeps({
+      wallet: {
+        async getHoldings() { return []; },
+        async cashout() { return { txSignature: "" }; },
+        async lend(args) { captured = args; return { txSignature: "sig-lend" }; },
+      },
+    });
+    const r = await handlers.private_lend({ mint: VALID_MINT, amount: "1000000" }, deps);
+    expect(r.content[0].text).toMatch(/lent 1000000/);
+    expect(captured!.amount).toBe(1_000_000n);
+  });
+
+  it("surfaces backend errors verbatim", async () => {
+    const { deps } = makeDeps({
+      wallet: {
+        async getHoldings() { return []; },
+        async cashout() { return { txSignature: "" }; },
+        async lend() { throw new Error("requires mainnet"); },
+      },
+    });
+    const r = await handlers.private_lend({ mint: VALID_MINT, amount: "1000000" }, deps);
+    expect(r.content[0].text).toMatch(/requires mainnet/);
+  });
+});
+
 describe("get_holdings", () => {
   it("returns 'not configured' when wallet dep absent", async () => {
     const { deps } = makeDeps();
