@@ -10,13 +10,13 @@ Built on the [b402 shielded pool](https://github.com/mmchougule/b402-solana) —
 
 <table>
   <tr>
-    <td align="center" width="60%">
-      <img src="docs/demo.gif" alt="terminal smoke — pnpm smoke runs shield + swap + cashout on Solana mainnet in ~25s" />
-      <br/><sub><b>Terminal:</b> <code>pnpm smoke</code> runs a real mainnet shield → swap → cashout in ~25 seconds. Prints Solscan links so you can verify the depositor wallet is absent from <code>tx.accountKeys</code>.</sub>
+    <td align="center" valign="top" width="60%">
+      <img src="docs/demo.gif" alt="terminal smoke — pnpm smoke runs shield + swap + cashout on Solana mainnet in ~25s" /><br/>
+      <sub><b>Terminal:</b> <code>pnpm smoke</code> — real mainnet shield → swap → cashout in ~25 seconds. Prints Solscan links so you can verify the depositor wallet is absent from <code>tx.accountKeys</code>.</sub>
     </td>
-    <td align="center" width="40%">
-      <img src="docs/tg-demo.gif" alt="telegram bot — buy a token, tap Verify privacy, see the proof inline" />
-      <br/><sub><b>Telegram:</b> buy a token, tap "Verify privacy", bot prints the on-chain accountKeys alongside your derived spending key — proves your wallet is NOT in the swap tx. <a href="https://github.com/mmchougule/stealth-trader/releases/download/v0.4.0/stealth-trader-demo-1.mp4">Full MP4</a>.</sub>
+    <td align="center" valign="top" width="40%">
+      <img src="docs/tg-demo.gif" alt="telegram bot — buy a token, tap Verify privacy, see the proof inline" /><br/>
+      <sub><b>Telegram:</b> buy a token, tap "Verify privacy", bot prints the on-chain <code>accountKeys</code> alongside your derived spending key — proves your wallet is NOT in the swap tx. <a href="https://github.com/mmchougule/stealth-trader/releases/download/v0.4.0/stealth-trader-demo-1.mp4">Full MP4</a>.</sub>
     </td>
   </tr>
 </table>
@@ -119,14 +119,26 @@ For production deployments, set `OPERATOR_FEE_KEYPAIR_PATH` to a keypair file wi
 ## Usage (Telegram)
 
 ```
-/start                            show your derived deposit address
-/wallet                           same, just the address
-/balance                          public SOL balance the bot can spend
-/follow <wallet> <sol>            start mirroring a leader at <sol> per buy
+/start                            tap-to-follow chips + your deposit address
+/wallet                           your deposit address (where to send SOL)
+/balance                          public SOL balance you can spend
+
+/buy <mint>                       open the Buy panel:
+                                    Private balance → spend an existing shielded note
+                                    Public balance  → shield fresh SOL and swap
+                                    Each path is a guaranteed-spendable button.
+
+/sell <mint>                      open the Sell panel — pick a shielded note to sell
+/holdings                         per-mint shielded balances + dust summary
+
+/follow <wallet> <sol>            mirror every buy from a leader privately
 /follows                          list active follows
 /unfollow <wallet>                stop mirroring
-/holdings                         shielded balances per mint
-/cashout <recipient>              unshield to a fresh address
+
+/leader <wallet>                  7-day stats — PnL, hit rate, top mints
+/discover                         top vetted leaders, tap to follow
+
+/cashout <recipient>              unshield to any wallet (no link to deposit)
 ```
 
 ## MCP tools

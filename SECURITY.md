@@ -2,7 +2,7 @@
 
 ## Reporting
 
-Please report vulnerabilities privately to **security@b402.dev**. We'll
+Please report vulnerabilities privately to **m@b402.ai**. We'll
 acknowledge within 72 hours and aim to ship a fix within 14 days for
 high-severity issues. Coordinated disclosure timeline is 90 days from
 acknowledgement; we'll publish details after a fix is in production.
@@ -43,4 +43,4 @@ The bot's threat model and trust assumptions are:
   bot tokens leaking compromises the per-bot deployment.
 
 For the full b402 protocol trust model see
-https://docs.b402.dev/architecture/trust-assumptions.
+https://docs.b402.ai/solana/concepts/trust-assumptions.

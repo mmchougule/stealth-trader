@@ -428,7 +428,11 @@ async function main() {
   // eslint-disable-next-line no-console
   console.log(`\n[OK] full smoke passed in ${summary.walltimeMs}ms`);
   writeSummary();
-  await pool.end();
+  // Fire pool.end() but don't await — pglite's worker thread can keep
+  // the event loop alive longer than the user has patience for. The OS
+  // reclaims everything on exit anyway. Same goes for the SDK's HTTP
+  // keepalive sockets.
+  pool.end().catch(() => { /* ignore */ });
   process.exit(0);
 }
 
