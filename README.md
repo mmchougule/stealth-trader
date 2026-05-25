@@ -2,17 +2,24 @@
 
 **MCP server + Telegram bot for agent-controllable private trading on Solana.** Drive it from Claude Code, Cursor, or any MCP runtime — your wallet never appears in the swap tx, the leader's block, or anyone's wallet tracker.
 
-Built on the [b402 shielded pool](https://docs.b402.ai/solana/concepts/shielded-pool) — same primitive that has processed **$800M+ in volume on Base**, now live on Solana mainnet (program `42a3hsCXtQLWonyxWZosaaCJCweYYKMrvNd25p1Jrt2y`). Shield SOL once. After that, every action — buy, copy a leader, lend, cash out — is signed by a relayer over zero-knowledge proofs.
+Built on the [b402 shielded pool](https://github.com/mmchougule/b402-solana) — same primitive that has processed **$800M+ in volume on Base**, now live on Solana mainnet (program `42a3hsCXtQLWonyxWZosaaCJCweYYKMrvNd25p1Jrt2y`). Shield SOL once. After that, every action — buy, copy a leader, lend, cash out — is signed by a relayer over zero-knowledge proofs.
 
 [Quickstart](#try-it-in-30-seconds) · [What an agent sees](#what-an-agent-sees) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
 
 ![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED) ![ci](https://github.com/mmchougule/stealth-trader/actions/workflows/ci.yml/badge.svg) ![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue) ![node: 20+](https://img.shields.io/badge/node-20+-339933) ![tests: 147](https://img.shields.io/badge/tests-147%20passing-green)
 
-<p align="center">
-  <img src="docs/demo.gif" alt="stealth-trader demo — pnpm smoke runs shield + swap + cashout on Solana mainnet in ~25s, ending on a Solscan link proving the depositor wallet is absent from accountKeys" width="720"/>
-</p>
-
-**See it work:** [25-sec terminal smoke](docs/demo.gif) (`pnpm smoke` → real mainnet tx, depositor verifiably absent from Solscan `accountKeys`) · [26-sec Telegram bot recording](https://github.com/mmchougule/stealth-trader/releases/download/v0.4.0/stealth-trader-demo-1.mp4) (buy a token, tap "Verify privacy", bot prints the proof inline)
+<table>
+  <tr>
+    <td align="center" width="60%">
+      <img src="docs/demo.gif" alt="terminal smoke — pnpm smoke runs shield + swap + cashout on Solana mainnet in ~25s" />
+      <br/><sub><b>Terminal:</b> <code>pnpm smoke</code> runs a real mainnet shield → swap → cashout in ~25 seconds. Prints Solscan links so you can verify the depositor wallet is absent from <code>tx.accountKeys</code>.</sub>
+    </td>
+    <td align="center" width="40%">
+      <img src="docs/tg-demo.gif" alt="telegram bot — buy a token, tap Verify privacy, see the proof inline" />
+      <br/><sub><b>Telegram:</b> buy a token, tap "Verify privacy", bot prints the on-chain accountKeys alongside your derived spending key — proves your wallet is NOT in the swap tx. <a href="https://github.com/mmchougule/stealth-trader/releases/download/v0.4.0/stealth-trader-demo-1.mp4">Full MP4</a>.</sub>
+    </td>
+  </tr>
+</table>
 
 ## What it does
 

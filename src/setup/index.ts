@@ -43,7 +43,9 @@ export async function runSetupWizard(): Promise<void> {
 
   const env: Partial<SetupEnv> = {
     B402_CLUSTER: "mainnet",
-    DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/stealth_trader",
+    // Empty = zero-Docker pglite default at ~/.stealth-trader/db.
+    // Set to postgresql://... only if you want a real cluster.
+    DATABASE_URL: "",
     HELIUS_WEBHOOK_SECRET: generateWebhookSecret(() => randomBytes(32)),
     MASTER_SEED: generateWebhookSecret(() => randomBytes(32)),
   };
@@ -75,7 +77,8 @@ export async function runSetupWizard(): Promise<void> {
     await prompts({
       type: "text",
       name: "v",
-      message: `Postgres URL (default: ${env.DATABASE_URL})`,
+      message:
+        "Postgres URL (leave blank to use the zero-Docker pglite default at ~/.stealth-trader/db)",
     })
   ).v as string | undefined;
   if (dbUrl?.trim()) env.DATABASE_URL = dbUrl.trim();
@@ -86,13 +89,7 @@ export async function runSetupWizard(): Promise<void> {
   console.log(`\nWrote ${envPath}`);
 
   // eslint-disable-next-line no-console
-  console.log("\nNext:");
-  // eslint-disable-next-line no-console
-  console.log("  docker compose up -d postgres     # if you don't have one already");
-  // eslint-disable-next-line no-console
-  console.log("  psql $DATABASE_URL -f sql/001_init.sql");
-  // eslint-disable-next-line no-console
-  console.log("  pnpm start");
+  console.log("\nNext: pnpm start  (schema auto-applies on first boot)");
 }
 
 async function ask<T>(
