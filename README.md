@@ -114,7 +114,7 @@ pnpm wizard                       # paste bot token + Helius key
 pnpm start                       # schema auto-applies on first boot
 ```
 
-Get a bot token from [@BotFather](https://t.me/botfather) and a free Helius key from [dev.helius.dev](https://dev.helius.dev). The bot ships with pglite (WASM Postgres) in-process, so the only thing you need to provision is the bot itself.
+Get a bot token from [@BotFather](https://t.me/botfather) and a free Helius key from [helius.dev](https://helius.dev). The bot ships with pglite (WASM Postgres) in-process, so the only thing you need to provision is the bot itself.
 
 For production deployments, set `OPERATOR_FEE_KEYPAIR_PATH` to a keypair file with ~0.05 SOL on hand. It absorbs the one-time ~0.002 SOL rent per (recipient, mint) on `/cashout` so users never see "insufficient funds for rent" the first time they withdraw to a fresh address.
 

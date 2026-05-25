@@ -19,7 +19,7 @@ import { randomBytes } from "node:crypto";
 import prompts from "prompts";
 import {
   validateTelegramToken,
-  validateHeliusKey,
+  validateRpcUrl,
   validateTgUserList,
   generateWebhookSecret,
 } from "./validate.js";
@@ -60,19 +60,17 @@ export async function runSetupWizard(): Promise<void> {
     validateTgUserList,
   );
 
-  const heliusKey = await ask("Helius API key (from dev.helius.dev)", validateHeliusKey);
-  env.HELIUS_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${heliusKey}`;
-
-  const webhookUrl = (
-    await prompts({
-      type: "text",
-      name: "v",
-      message:
-        "Public webhook URL — needed only for /follow copy-trade (use ngrok or your host). " +
-        "Leave blank if you only need /buy /sell /cashout /holdings.",
-    })
-  ).v as string | undefined;
-  env.WEBHOOK_PUBLIC_URL = webhookUrl?.trim() ?? "";
+  // Accept any Solana mainnet RPC URL — Helius, Quicknode, Triton, Alchemy,
+  // your own validator. The validator just sanity-checks it's a parseable URL
+  // pointing at mainnet.
+  env.HELIUS_RPC_URL = await ask(
+    "Solana mainnet RPC URL (any provider; free Helius key works: helius.dev → Get RPC URL)",
+    validateRpcUrl,
+  );
+  // Webhook URL is set per-deployment, not at setup time. Operators with a
+  // public host can set WEBHOOK_PUBLIC_URL in .env later to enable /follow
+  // copy-trade. /buy /sell /cashout /holdings don't need it.
+  env.WEBHOOK_PUBLIC_URL = "";
 
   const dbUrl = (
     await prompts({

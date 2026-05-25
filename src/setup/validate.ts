@@ -40,8 +40,34 @@ export function validateHeliusKey(input: string): Result<string> {
   if (s.length < 30 || s.split("-").length < 5) {
     return {
       ok: false,
-      error: "Helius API key looks too short. Copy the full key from dev.helius.dev.",
+      error: "Helius API key looks too short. Copy the full key from helius.dev.",
     };
+  }
+  return { ok: true, value: s };
+}
+
+/**
+ * Sanity-check a Solana mainnet RPC URL. Accepts any provider — Helius,
+ * Quicknode, Triton, Alchemy, your own validator. We just confirm it's a
+ * parseable https:// URL, not the rate-limited public endpoint, and points
+ * at mainnet (not devnet/testnet).
+ */
+export function validateRpcUrl(input: string): Result<string> {
+  const s = input.trim();
+  if (!s) return { ok: false, error: "RPC URL is empty." };
+  let u: URL;
+  try { u = new URL(s); } catch { return { ok: false, error: "Not a valid URL." }; }
+  if (u.protocol !== "https:" && u.protocol !== "http:") {
+    return { ok: false, error: "RPC URL must use http(s)://" };
+  }
+  if (u.host === "api.mainnet-beta.solana.com") {
+    return {
+      ok: false,
+      error: "Public mainnet RPC will rate-limit. Use a provider (free key at helius.dev / quicknode.com).",
+    };
+  }
+  if (s.includes("devnet") || s.includes("testnet")) {
+    return { ok: false, error: "This is a mainnet-only bot. Provide a mainnet RPC URL." };
   }
   return { ok: true, value: s };
 }
