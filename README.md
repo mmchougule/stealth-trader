@@ -15,7 +15,7 @@ Shield SOL into the [b402 shielded pool](https://docs.b402.ai/solana/concepts/sh
 ## See it work
 
 - **Terminal smoke** — `pnpm smoke` runs shield → swap → cashout on Solana mainnet in ~25 seconds, ending on a Solscan link where you can verify the depositor wallet is absent from `tx.accountKeys`: [`docs/demo.gif`](docs/demo.gif)
-- **Telegram bot** (26-sec recording) — buy a token, tap "Verify privacy", see the bot prove your derived spending key is NOT in the swap tx: [`stealth-trader-demo-1.mp4`](https://github.com/mmchougule/stealth-trader/releases/download/v0.3.0/stealth-trader-demo-1.mp4)
+- **Telegram bot** (26-sec recording) — buy a token, tap "Verify privacy", see the bot prove your derived spending key is NOT in the swap tx: [`stealth-trader-demo-1.mp4`](https://github.com/mmchougule/stealth-trader/releases/download/v0.4.0/stealth-trader-demo-1.mp4)
 
 ## What it does today
 
