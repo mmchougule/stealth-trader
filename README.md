@@ -50,20 +50,22 @@ export HELIUS_RPC_URL="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
 pnpm smoke
 ```
 
-A real private trade on Solana mainnet in ~23 seconds. Here's what happens:
+**Try it before any Telegram setup** — the smoke only needs a Helius key, runs against real mainnet in ~25 seconds, and proves the privacy property end-to-end.
 
-1. Generates your root-of-trust seed into `./.env` (back it up before depositing real funds)
-2. Derives your shielded-pool deposit wallet from that seed
-3. Auto-funds the wallet from your Solana CLI keypair (`~/.config/solana/id.json`) — about 0.0045 SOL
-4. Shields the SOL into the b402 pool. *Your wallet signs this — it's the one on-chain step where you're visible.*
+Here's exactly what happens, no surprises:
+
+1. Generates a `MASTER_SEED` into `./.env` (back this up if you keep using it)
+2. Derives a test wallet from that seed
+3. **Transfers 0.0045 SOL from your Solana CLI wallet** (`~/.config/solana/id.json`) to the test wallet. The script previews this with a 5-second Ctrl-C window. Opt out: `STEALTH_NO_AUTOFUND=1` + fund the printed address manually.
+4. Shields 0.0015 SOL into the b402 pool. *Your test wallet signs this — the one on-chain step where you're visible.*
 5. Swaps shielded SOL → USDC. *Relayer signs; your wallet isn't in the swap tx.*
-6. Unshields the USDC to a fresh recipient address. *Relayer signs; your wallet isn't in the cashout tx either.*
+6. Cashes the USDC out — back to your CLI wallet by default. *Relayer signs; your wallet isn't in the cashout tx either.*
 
-The script prints two Solscan links — the swap and the cashout. Open both: your depositor address doesn't appear in `accountKeys` for either one. That's the privacy property, verifiable on chain. ([How it works on-chain →](https://docs.b402.ai/solana/concepts/privacy-model))
+The script prints two Solscan links. Open both: the test wallet address doesn't appear in `accountKeys` for the swap or the cashout. That's the privacy property, verifiable on chain. ([How it works on-chain →](https://docs.b402.ai/solana/concepts/privacy-model))
 
-The whole demo costs about a penny in fees. Your 0.0015 SOL becomes USDC at the buy, comes back as USDC at the cashout — round-trip slippage is a few cents.
+**Net cost: ~$0.01** in tx fees + a few cents of swap slippage. The 0.0015 SOL becomes ~0.13 USDC and comes back to your CLI wallet at the cashout — nothing is drained.
 
-Edge cases: no Solana CLI keypair? The script prints the deposit address and waits 5 minutes for you to fund it manually. Don't want auto-funding? Set `STEALTH_NO_AUTOFUND=1`.
+No Solana CLI keypair? The script prints the deposit address and waits 5 minutes for you to fund it manually.
 
 ## What an agent sees
 

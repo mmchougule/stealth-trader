@@ -68,7 +68,8 @@ export async function runSetupWizard(): Promise<void> {
       type: "text",
       name: "v",
       message:
-        "Public webhook URL (e.g. https://your.host/webhook/helius). Leave blank to skip Helius webhook setup.",
+        "Public webhook URL — needed only for /follow copy-trade (use ngrok or your host). " +
+        "Leave blank if you only need /buy /sell /cashout /holdings.",
     })
   ).v as string | undefined;
   env.WEBHOOK_PUBLIC_URL = webhookUrl?.trim() ?? "";
@@ -87,9 +88,19 @@ export async function runSetupWizard(): Promise<void> {
   fs.writeFileSync(envPath, renderEnv(env as SetupEnv));
   // eslint-disable-next-line no-console
   console.log(`\nWrote ${envPath}`);
-
   // eslint-disable-next-line no-console
-  console.log("\nNext: pnpm start  (schema auto-applies on first boot)");
+  console.log(
+    `\nMASTER_SEED was generated for you and stored in .env.\n` +
+    `Back this file up — losing it means losing every shielded note your users hold.\n`,
+  );
+  // eslint-disable-next-line no-console
+  console.log(`Advanced (optional): set OPERATOR_FEE_KEYPAIR_PATH to a Solana keypair file`);
+  // eslint-disable-next-line no-console
+  console.log(`  with ~0.05 SOL — it covers one-time recipient ATA rent on /cashout so users`);
+  // eslint-disable-next-line no-console
+  console.log(`  never see "insufficient funds for rent" the first time they withdraw.\n`);
+  // eslint-disable-next-line no-console
+  console.log("Next: pnpm start  (schema auto-applies on first boot)");
 }
 
 async function ask<T>(

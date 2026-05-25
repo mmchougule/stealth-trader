@@ -172,8 +172,27 @@ async function maybeAutoFund(
     console.log(`[fund] CLI wallet too low to auto-fund (have ${cliBalance}, need ${transferAmount + cliReserve}); waiting for manual top-up`);
     return null;
   }
+  // Consent preview before transferring. In an interactive TTY we wait 5s
+  // for Ctrl-C; non-interactive (CI) skips the countdown since the env flag
+  // STEALTH_NO_AUTOFUND=1 is the supported opt-out and the user has already
+  // committed by running the script.
+  const sol = (Number(transferAmount) / 1e9).toFixed(4);
   // eslint-disable-next-line no-console
-  console.log(`[fund] auto-funding ${transferAmount} lamports from ${cliKp.publicKey.toBase58()}`);
+  console.log(`[fund] about to transfer ${sol} SOL from ${cliKp.publicKey.toBase58()}`);
+  // eslint-disable-next-line no-console
+  console.log(`       (to ${recipient.toBase58()} — the smoke test wallet derived from MASTER_SEED)`);
+  // eslint-disable-next-line no-console
+  console.log(`       this SOL round-trips back to your wallet as USDC at cashout (step 6).`);
+  if (process.stdin.isTTY) {
+    // eslint-disable-next-line no-console
+    process.stdout.write("       Ctrl-C in 5s to abort... ");
+    for (let i = 5; i > 0; i--) {
+      process.stdout.write(`${i} `);
+      await new Promise((r) => setTimeout(r, 1_000));
+    }
+    // eslint-disable-next-line no-console
+    console.log("");
+  }
   const tx = new Transaction().add(SystemProgram.transfer({
     fromPubkey: cliKp.publicKey,
     toPubkey: recipient,
@@ -188,7 +207,21 @@ async function maybeAutoFund(
 async function main() {
   // ─── 0. Env + connections ──────────────────────────────────────────────
   // eslint-disable-next-line no-console
-  console.log(`[stealth-trader smoke] starting on ${summary.cluster}`);
+  console.log(`[stealth-trader smoke] real Solana mainnet end-to-end demo`);
+  // eslint-disable-next-line no-console
+  console.log(`
+  What this does (~25 seconds, ~$0.01 net cost):
+    1. Derive a test wallet from your MASTER_SEED (writes to ./.env on first run)
+    2. Auto-fund the test wallet with 0.0045 SOL from your Solana CLI wallet
+       (~/.config/solana/id.json) — opt out with STEALTH_NO_AUTOFUND=1
+    3. Shield 0.0015 SOL into the b402 pool (your wallet signs this on-chain step)
+    4. Swap shielded SOL → USDC via Jupiter (relayer signs; your wallet absent)
+    5. Read shielded holdings
+    6. Cashout the USDC back to your CLI wallet (relayer signs; your wallet absent)
+
+  Net: your CLI wallet ends with slightly less SOL + ~0.13 USDC. Nothing is drained.
+  Verifiable on Solscan: depositor address absent from both the swap and cashout txs.
+`);
   let masterSeedHex: string;
   try { masterSeedHex = ensureMasterSeed(); } catch (e) { fail("env", e, 1); }
   const rpcUrl = process.env.HELIUS_RPC_URL;
