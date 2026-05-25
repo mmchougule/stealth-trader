@@ -20,8 +20,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "setup": "tsx src/setup/index.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "wizard": "tsx src/setup/index.ts"
   },
   "dependencies": {
     "@b402ai/solana": "^0.0.33",

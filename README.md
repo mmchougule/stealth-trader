@@ -21,6 +21,8 @@ Built on the [b402 shielded pool](https://github.com/mmchougule/b402-solana) —
   </tr>
 </table>
 
+**Try it now, no install:** [t.me/btrader021bot](https://t.me/btrader021bot) — open in Telegram, send `/start`, send a small amount of SOL, try `/buy <mint>`. Same code that's in this repo, running for you.
+
 ## What it does
 
 | feature | what it is | how to use |
@@ -108,7 +110,7 @@ For more MCP-side wiring (Claude Code, Cursor configs, prompt patterns): [b402 M
 ```bash
 git clone https://github.com/mmchougule/stealth-trader && cd stealth-trader
 pnpm install
-pnpm setup                       # paste bot token + Helius key
+pnpm wizard                       # paste bot token + Helius key
 pnpm start                       # schema auto-applies on first boot
 ```
 

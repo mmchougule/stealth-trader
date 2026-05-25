@@ -3,17 +3,25 @@
  * stealth-trader CLI.
  *
  * Subcommands:
- *   setup   — interactive setup wizard (writes .env, applies SQL schema)
- *   start   — boot the bot (also the default)
+ *   wizard  — interactive setup wizard (writes .env, applies SQL schema)
+ *   mcp     — start the MCP server on stdio
+ *   start   — boot the Telegram bot (also the default)
  */
 import "dotenv/config";
 
 async function main() {
   const cmd = process.argv[2] ?? "start";
   switch (cmd) {
-    case "setup": {
+    case "setup":
+    case "wizard": {
       const mod = await import("./setup/index.js");
       await mod.runSetupWizard();
+      return;
+    }
+    case "mcp": {
+      // Boot the MCP server in-process. Same binary as the bot so the
+      // npx install line `npx @b402ai/stealth-trader mcp` works.
+      await import("./mcp/index.js");
       return;
     }
     case "start": {
@@ -23,7 +31,7 @@ async function main() {
     case "-h":
     case "--help":
       // eslint-disable-next-line no-console
-      console.log("Usage: stealth-trader [setup|start]");
+      console.log("Usage: stealth-trader [wizard|mcp|start]");
       return;
     default:
       // eslint-disable-next-line no-console
