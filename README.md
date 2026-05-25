@@ -1,32 +1,32 @@
-<p align="center">
-  <img src="docs/demo.gif" alt="stealth-trader demo — pnpm smoke runs shield + swap + cashout on Solana mainnet in ~25s, ending on a Solscan link proving the depositor wallet is absent from accountKeys" width="720"/>
-</p>
-
 # stealth-trader
 
 **MCP server + Telegram bot for agent-controllable private trading on Solana.** Drive it from Claude Code, Cursor, or any MCP runtime — your wallet never appears in the swap tx, the leader's block, or anyone's wallet tracker.
 
-Shield SOL into the [b402 shielded pool](https://docs.b402.ai/solana/concepts/shielded-pool) once. After that, every action — buy a token, mirror a leader, lend into Kamino, cash out to a fresh address — is signed by a relayer over zero-knowledge proofs. An AI agent can compose these tools end-to-end (*"find the top 5 Solana memecoin wallets this week and follow each at 0.005 SOL"*) without your wallet ever signing a trade tx. Mainnet program `42a3hsCXtQLWonyxWZosaaCJCweYYKMrvNd25p1Jrt2y`. Privacy properties + trust model live in the [b402 docs](https://docs.b402.ai/solana/concepts/privacy-model).
+Built on the [b402 shielded pool](https://docs.b402.ai/solana/concepts/shielded-pool) — same primitive that has processed **$800M+ in volume on Base**, now live on Solana mainnet (program `42a3hsCXtQLWonyxWZosaaCJCweYYKMrvNd25p1Jrt2y`). Shield SOL once. After that, every action — buy, copy a leader, lend, cash out — is signed by a relayer over zero-knowledge proofs.
 
-[Quickstart](#try-it-in-30-seconds) · [What an agent sees](#what-an-agent-sees) · [Use cases](#use-cases) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
+[Quickstart](#try-it-in-30-seconds) · [What an agent sees](#what-an-agent-sees) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
 
 ![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED) ![ci](https://github.com/mmchougule/stealth-trader/actions/workflows/ci.yml/badge.svg) ![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue) ![node: 20+](https://img.shields.io/badge/node-20+-339933) ![tests: 147](https://img.shields.io/badge/tests-147%20passing-green)
 
-## See it work
+<p align="center">
+  <img src="docs/demo.gif" alt="stealth-trader demo — pnpm smoke runs shield + swap + cashout on Solana mainnet in ~25s, ending on a Solscan link proving the depositor wallet is absent from accountKeys" width="720"/>
+</p>
 
-- **Terminal smoke** — `pnpm smoke` runs shield → swap → cashout on Solana mainnet in ~25 seconds, ending on a Solscan link where you can verify the depositor wallet is absent from `tx.accountKeys`: [`docs/demo.gif`](docs/demo.gif)
-- **Telegram bot** (26-sec recording) — buy a token, tap "Verify privacy", see the bot prove your derived spending key is NOT in the swap tx: [`stealth-trader-demo-1.mp4`](https://github.com/mmchougule/stealth-trader/releases/download/v0.4.0/stealth-trader-demo-1.mp4)
+**See it work:** [25-sec terminal smoke](docs/demo.gif) (`pnpm smoke` → real mainnet tx, depositor verifiably absent from Solscan `accountKeys`) · [26-sec Telegram bot recording](https://github.com/mmchougule/stealth-trader/releases/download/v0.4.0/stealth-trader-demo-1.mp4) (buy a token, tap "Verify privacy", bot prints the proof inline)
 
-## What it does today
+## What it does
 
-| | what it is | status |
+| feature | what it is | how to use |
 |---|---|---|
-| **Private swap** | Agent buys a token. Your wallet isn't in the swap tx. Avoids portfolio leak + sandwich front-runs. | shipped — `pnpm smoke` proves it on mainnet |
-| **Stealth copy-trade** | Mirror a Solana leader at N SOL per buy. Your wallet isn't in the leader's block. | shipped — buys only; sells in v0.4 |
+| **Private swap** | Buy any SPL token through Jupiter. Wallet never signs the swap; relayer does. | TG `/buy <mint>` · MCP `private_buy` · `pnpm smoke` |
+| **Stealth copy-trade** | Mirror a Solana leader at N SOL per buy. Your wallet isn't in the leader's block; the follower-set indexers can't tag you. | TG `/follow <wallet> <sol>` · MCP `follow` |
+| **Private cashout** | Withdraw shielded balance to any wallet. The recipient has no on-chain edge to your deposit address. | TG `/cashout <addr>` · MCP `cashout` |
+| **Leader discovery** | Rank candidate wallets by 7-day on-chain PnL + buy activity — agent-callable. | TG `/discover` · MCP `discover_leaders` |
+| **Private holdings** | Per-mint shielded balance — only the viewing key holder can read it. | TG `/holdings` · MCP `get_holdings` |
+| **Private lend** | Earn yield by depositing shielded USDC into Kamino V2. Deposit address absent on chain. | MCP `private_lend` (mainnet) |
+| **Leader stats** | 7-day PnL, hit rate, avg position size, top mints for any wallet. | TG `/leader <wallet>` |
 
-Both share one primitive: shield once, then every action after is signed by a relayer over zero-knowledge proofs that prove "this came from a valid shielded note" without revealing which one or whose.
-
-**v0.4 roadmap**: copy-trade sells (mirror leader sells too), private lend into Kamino (`private_lend` MCP tool is wired against the [Kamino adapter](https://docs.b402.ai/solana/adapters/kamino); blocked on an upstream b402-relayer encoding fix).
+All seven exposed as MCP tools so an agent can compose them: *"Discover top 5 wallets, follow each at 0.005 SOL, alert me when shielded USDC clears $500."* That single prompt → 5+ tool calls → bot executes privately end-to-end. No wallet attribution, no follower-set leak, no MEV-bot bait.
 
 ## Why it matters
 
