@@ -21,7 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "tsx scripts/smoke.ts",
-    "wizard": "tsx src/setup/index.ts"
+    "wizard": "tsx src/cli.ts wizard"
   },
   "dependencies": {
     "@b402ai/solana": "^0.0.33",
