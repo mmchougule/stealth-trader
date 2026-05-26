@@ -26,7 +26,7 @@ import { makeTrade, computeBuyFee } from "./trade.js";
 import { registerHandlers } from "./telegram/router.js";
 import { startDepositWatcher } from "./deposits.js";
 import { getTokenInfo, getTokenDecimals, getQuote, SOL_MINT } from "./jupiter.js";
-import { listHoldings, getHolding, recordSell } from "./holdings.js";
+import { getHolding, recordSell } from "./holdings.js";
 
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
@@ -156,19 +156,21 @@ async function main(): Promise<void> {
         return { ok: false as const, error: (e as Error).message };
       }
     },
-    // Source the sell-token picker from the cost-basis LEDGER, not the SDK
-    // shielded view. The ledger always stores the real base58 mint + symbol +
-    // decimals; the SDK view can emit "unknown:<frhex>" for a memecoin note on
-    // a cold instance, which (a) is non-base58 → crashes new PublicKey() in the
-    // sell path, and (b) gets filtered out → the position vanishes from Sell.
-    // Reading the ledger here is exactly what b402-trader does (getHolding).
+    // Source the sell picker from the SDK shielded view (the actual pool
+    // state, now indexer-resolved to base58 — so a token bought before the
+    // ledger existed still shows). Overlay the cost-basis ledger only for
+    // symbol/decimals when we have them. wSOL is excluded by getHoldings (it's
+    // private SOL, not a sellable token).
     holdings: async (tgId: number) => {
-      const rows = await listHoldings(tgId);
-      return rows.map((h) => ({
-        mint: h.mint,
-        amount: h.amount,
-        decimals: h.decimals,
-        symbol: h.symbol,
+      const sdkRows = await backend.getHoldings(tgId);
+      return Promise.all(sdkRows.map(async (h) => {
+        const led = await getHolding(tgId, h.mint).catch(() => undefined);
+        return {
+          mint: h.mint,
+          amount: h.amount,
+          decimals: led?.decimals ?? h.decimals,
+          symbol: led?.symbol ?? null,
+        };
       }));
     },
     tokenNotes: async (tgId: number, mint: string): Promise<bigint[]> => {
@@ -186,14 +188,20 @@ async function main(): Promise<void> {
   // (what the user paid); quoteSolOut prices the position now.
   const walletDeps = {
     ...backend,
+    // /holdings sources from the SDK shielded view (actual pool state,
+    // indexer-resolved) so every real position shows — then overlays the
+    // cost-basis ledger for symbol + PnL where a recorded buy exists.
     localHoldings: async (tgId: number) => {
-      const rows = await listHoldings(tgId);
-      return rows.map((h) => ({
-        mint: h.mint,
-        amount: h.amount,
-        decimals: h.decimals,
-        symbol: h.symbol,
-        totalInvestedLamports: BigInt(h.total_invested_lamports),
+      const sdkRows = await backend.getHoldings(tgId);
+      return Promise.all(sdkRows.map(async (h) => {
+        const led = await getHolding(tgId, h.mint).catch(() => undefined);
+        return {
+          mint: h.mint,
+          amount: h.amount,
+          decimals: led?.decimals ?? h.decimals,
+          symbol: led?.symbol ?? null,
+          totalInvestedLamports: led ? BigInt(led.total_invested_lamports) : 0n,
+        };
       }));
     },
     quoteSolOut: async (mint: string, rawAmount: bigint): Promise<bigint | null> => {
