@@ -59,3 +59,32 @@ export function formatHoldDuration(secs: number): string {
 export function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
+
+/**
+ * Human-friendly magnitude for a decimal token quantity. Big numbers get a
+ * K/M suffix; sub-1 amounts keep 6 places so micro-positions stay legible.
+ * Display-only — never feed the result back into math.
+ */
+export function formatNum(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
+  if (n >= 1) return n.toFixed(2);
+  return n.toFixed(6);
+}
+
+/**
+ * Render a rugcheck score as a one-line badge. `score` is RugCheck's raw
+ * risk score (higher = riskier); `undefined` means we never got a number
+ * (API down / token unindexed) and we say so rather than implying safety.
+ * ASCII only per house style — no traffic-light emoji.
+ *
+ * Thresholds mirror b402-trader's buy panel: 0 or <1000 reads safe, <10000
+ * caution, otherwise high risk. The hard danger-flag block happens upstream
+ * in safety.checkToken; this badge is the soft, informational signal.
+ */
+export function rugcheckBadge(score: number | undefined): string {
+  if (score === undefined) return "rugcheck: unknown";
+  if (score < 1000) return `rugcheck: safe (${score})`;
+  if (score < 10_000) return `rugcheck: caution (${score})`;
+  return `rugcheck: HIGH RISK (${score})`;
+}
