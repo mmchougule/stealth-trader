@@ -45,6 +45,10 @@ export interface Holding {
 }
 
 export interface WalletBackend extends SwapBackend {
+  /** Sell a shielded token note back to SOL: swap(token → wSOL). Mirror
+   *  of privateBuy. `rawAmount` must equal one existing token note's
+   *  value (getNotes(tgId, mint) lists them). Returns lamports received. */
+  privateSell(args: { tgId: number; mint: string; rawAmount: bigint }): Promise<{ txSignature: string; solReceived: bigint }>;
   /** Return shielded balances for the user, one row per mint. */
   getHoldings(tgId: number): Promise<Holding[]>;
   /** Unshield to a recipient. mint defaults to wSOL (so the recipient
@@ -168,6 +172,25 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
       if (!txSignature) throw new Error("SDK returned no signature on swap");
       const tokensReceived = res.outAmount === undefined ? 0n : BigInt(res.outAmount);
       return { txSignature, tokensReceived };
+    },
+
+    async privateSell(args) {
+      // Sell is buy in reverse: spend an existing shielded TOKEN note,
+      // swap it to wSOL via the b402 Jupiter adapter, land a shielded
+      // wSOL note. No shield step — the input note already exists from a
+      // prior buy. `rawAmount` must equal one existing token note's value
+      // (the adapt circuit consumes exactly one note); callers get valid
+      // sizes from getNotes(tgId, mint).
+      const sdk = await getSdk(args.tgId);
+      const res = await swapWithLadder(sdk, {
+        inMint: new PublicKey(args.mint),
+        outMint: NATIVE_MINT,
+        amount: args.rawAmount,
+      });
+      const txSignature = res.signature ?? res.sig ?? "";
+      if (!txSignature) throw new Error("SDK returned no signature on sell swap");
+      const solReceived = res.outAmount === undefined ? 0n : BigInt(res.outAmount);
+      return { txSignature, solReceived };
     },
 
     async getHoldings(tgId) {

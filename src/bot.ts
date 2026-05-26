@@ -68,10 +68,19 @@ async function main(): Promise<void> {
     wallet: backend,
     ...(process.env.HELIUS_API_KEY ? { heliusApiKey: process.env.HELIUS_API_KEY } : {}),
     buy: trade,
-    // privateSell isn't on SwapBackend yet; runSell handles the missing
-    // executeSell gracefully with a v0.6 hint. Wire it the moment the
-    // backend method lands.
-    sell: {},
+    sell: {
+      // Adapt backend.privateSell → the SellDeps.executeSell shape.
+      // Wrapped in the same ok/error envelope as buy so the panel renders
+      // a clean receipt or a refundless failure line.
+      executeSell: async (args) => {
+        try {
+          const r = await backend.privateSell(args);
+          return { ok: true as const, txSignature: r.txSignature, solReceived: r.solReceived };
+        } catch (e) {
+          return { ok: false as const, error: (e as Error).message };
+        }
+      },
+    },
   });
 
   const connection = makeConnection(cfg.heliusRpcUrl);
