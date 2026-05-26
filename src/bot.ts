@@ -13,7 +13,7 @@
 import "dotenv/config";
 import fs from "node:fs";
 import { Bot } from "grammy";
-import { Keypair } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
@@ -78,14 +78,15 @@ async function main(): Promise<void> {
 
   const trade = makeTrade({ backend, balance, tokenMeta });
 
-  // Read the user's spendable public SOL from the ledger. The Buy panel's
-  // PUBLIC section funds a shield+swap from this balance.
+  // The Buy panel's PUBLIC section funds a shield+swap by wrapping native SOL
+  // from the derived wallet. So its % chips MUST be computed off the ACTUAL
+  // on-chain native balance — not the DB ledger. The ledger can drift above
+  // on-chain native (e.g. a refunded-but-shielded prior buy), and offering a
+  // chip larger than the wrappable native fails with "Transfer: insufficient
+  // lamports". b402-trader reads snap.publicSol (on-chain) for exactly this.
   const publicSolLamports = async (tgId: number): Promise<bigint> => {
-    const r = await pool.query<{ sol_balance_lamports: string }>(
-      `SELECT sol_balance_lamports FROM stealth.users WHERE tg_id = $1`,
-      [tgId],
-    );
-    return r.rowCount && r.rowCount > 0 ? BigInt(r.rows[0]!.sol_balance_lamports) : 0n;
+    const pk = new PublicKey(userPubkey(tgId, masterSeed));
+    return BigInt(await connection.getBalance(pk, "confirmed"));
   };
 
   // The Buy panel adapts trade.executeBuy plus a set of read-only lookups.
