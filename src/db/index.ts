@@ -10,7 +10,7 @@
  * pass the URL — the factory reads `process.env.DATABASE_URL` (already
  * loaded by `dotenv/config` from the bot entrypoint).
  *
- * applySchema() runs sql/001..003 on first boot so a stranger never has
+ * applySchema() runs sql/001..005 on first boot so a stranger never has
  * to `psql -f`. Idempotent — `CREATE TABLE IF NOT EXISTS` everywhere.
  */
 import fs from "node:fs";
@@ -80,13 +80,19 @@ export function getPool(): Promise<DbPool> {
 }
 
 /**
- * One-shot schema apply. Runs sql/001..003 in order. Each migration
+ * One-shot schema apply. Runs sql/001..005 in order. Each migration
  * uses CREATE … IF NOT EXISTS so re-running is a no-op. Called from
  * the bot entrypoint AND the setup wizard so a stranger never has to
  * touch psql.
  */
 export async function applySchema(pool: DbPool, sqlDir: string): Promise<void> {
-  for (const f of ["001_init.sql", "002_balances.sql", "003_notes.sql"]) {
+  for (const f of [
+    "001_init.sql",
+    "002_balances.sql",
+    "003_notes.sql",
+    "004_deposit_baseline.sql",
+    "005_holdings_trades.sql",
+  ]) {
     const file = path.join(sqlDir, f);
     if (!fs.existsSync(file)) continue;
     const sql = fs.readFileSync(file, "utf8");
@@ -118,9 +124,36 @@ function splitSql(sql: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-/** withTx: run `fn` inside BEGIN/COMMIT, ROLLBACK on throw. Works on both
- *  the Postgres and pglite backends. */
-export async function withTx<T>(pool: DbPool, fn: (c: DbClient) => Promise<T>): Promise<T> {
+/**
+ * One-off query helper. Resolves the singleton pool on first call and
+ * delegates to `pool.query`. Lets call sites skip the `await getPool()`
+ * dance when they don't need a transaction.
+ *
+ *   import { q } from "./db/index.js";
+ *   const r = await q<UserRow>("SELECT * FROM stealth.users WHERE tg_id = $1", [tgId]);
+ */
+export async function q<R = Record<string, unknown>>(
+  sql: string,
+  params?: unknown[],
+): Promise<{ rows: R[]; rowCount: number }> {
+  const p = await getPool();
+  return p.query<R>(sql, params);
+}
+
+/**
+ * Run `fn` inside BEGIN/COMMIT; ROLLBACK on throw. Two call shapes:
+ *   - withTx(pool, fn) — explicit pool (used by code that already holds one)
+ *   - withTx(fn)       — resolves the singleton pool itself
+ * Distinguished at runtime by argument count.
+ */
+export function withTx<T>(pool: DbPool, fn: (c: DbClient) => Promise<T>): Promise<T>;
+export function withTx<T>(fn: (c: DbClient) => Promise<T>): Promise<T>;
+export async function withTx<T>(
+  poolOrFn: DbPool | ((c: DbClient) => Promise<T>),
+  maybeFn?: (c: DbClient) => Promise<T>,
+): Promise<T> {
+  const pool = typeof poolOrFn === "function" ? await getPool() : poolOrFn;
+  const fn = typeof poolOrFn === "function" ? poolOrFn : maybeFn!;
   const c = await pool.connect();
   try {
     await c.query("BEGIN");
