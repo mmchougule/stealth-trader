@@ -13,6 +13,7 @@
  */
 import { Bot, type Context } from "grammy";
 import type { Deps, CommandCtx } from "./types.js";
+import { log } from "../log.js";
 import { showWallet } from "./panels/wallet.js";
 import { showHoldings } from "./panels/holdings.js";
 import { showLeader } from "./panels/leader.js";
@@ -42,18 +43,39 @@ export function registerHandlers(bot: Bot, deps: RouterDeps): void {
     reply: async (m) => { await ctx.reply(m); },
   });
 
-  bot.command(["start", "help"], async (ctx) => {
+  // Wrap every command in auth + try/catch. A handler that throws (DB blip,
+  // RPC timeout, SDK error) must NOT escape into grammy's middleware chain —
+  // an uncaught throw there can stall the polling loop. We catch, log, and
+  // reply a generic message so the bot stays alive for the next update.
+  const handle = (
+    name: string,
+    fn: (ctx: CommandCtx) => Promise<void>,
+  ) => async (ctx: Context): Promise<void> => {
     if (!auth(ctx)) return;
-    await startHandler(deps, cmd(ctx));
+    try {
+      await fn(cmd(ctx));
+    } catch (e) {
+      log.error({ cmd: name, tgId: ctx.from?.id, err: (e as Error).message }, "command handler threw");
+      await ctx.reply("something went wrong — try again in a moment.").catch(() => {});
+    }
+  };
+
+  bot.command(["start", "help"], handle("start", (c) => startHandler(deps, c)));
+  bot.command("wallet",   handle("wallet",   (c) => showWallet(deps, c)));
+  bot.command("balance",  handle("balance",  (c) => balanceHandler(deps, c)));
+  bot.command("holdings", handle("holdings", (c) => showHoldings(deps, c)));
+  bot.command("leader",   handle("leader",   (c) => showLeader(deps, c)));
+  bot.command("discover", handle("discover", (c) => showDiscover(deps, c)));
+  bot.command("cashout",  handle("cashout",  (c) => runCashout(deps, c)));
+  bot.command("buy",      handle("buy",      (c) => runBuy(deps, deps.buy, c)));
+  bot.command("sell",     handle("sell",     (c) => runSell(deps, deps.sell, c)));
+
+  // Last-resort error boundary. Anything that still escapes (callback query
+  // handlers registered inside panels, middleware) lands here instead of
+  // crashing the long-poll loop.
+  bot.catch((err) => {
+    log.error({ err: err.message, update: err.ctx?.update?.update_id }, "grammy uncaught");
   });
-  bot.command("wallet",   async (ctx) => { if (auth(ctx)) await showWallet(deps, cmd(ctx)); });
-  bot.command("balance",  async (ctx) => { if (auth(ctx)) await balanceHandler(deps, cmd(ctx)); });
-  bot.command("holdings", async (ctx) => { if (auth(ctx)) await showHoldings(deps, cmd(ctx)); });
-  bot.command("leader",   async (ctx) => { if (auth(ctx)) await showLeader(deps, cmd(ctx)); });
-  bot.command("discover", async (ctx) => { if (auth(ctx)) await showDiscover(deps, cmd(ctx)); });
-  bot.command("cashout",  async (ctx) => { if (auth(ctx)) await runCashout(deps, cmd(ctx)); });
-  bot.command("buy",      async (ctx) => { if (auth(ctx)) await runBuy(deps, deps.buy, cmd(ctx)); });
-  bot.command("sell",     async (ctx) => { if (auth(ctx)) await runSell(deps, deps.sell, cmd(ctx)); });
 }
 
 async function startHandler(deps: Deps, ctx: CommandCtx): Promise<void> {

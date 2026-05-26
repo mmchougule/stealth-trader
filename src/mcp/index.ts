@@ -40,17 +40,17 @@ import { makeTrade } from "../trade.js";
 import { handlers, type McpDeps } from "./handlers.js";
 import {
   getWalletInput, getBalanceInput, getHoldingsInput,
-  followInput, unfollowInput, listFollowsInput,
   privateBuyInput, cashoutInput, privateLendInput, discoverLeadersInput,
 } from "./schemas.js";
 
+// v0.5 tool surface. follow / unfollow / list_follows are intentionally
+// NOT registered — copy-trade lands in v0.6 once a hosted Helius webhook
+// proxy exists. Registering them now would let an agent insert follow
+// rows that nothing processes. discover_leaders stays (read-only scoring).
 const tools = [
   { name: "get_wallet",        schema: getWalletInput,        handler: handlers.get_wallet },
   { name: "get_balance",       schema: getBalanceInput,       handler: handlers.get_balance },
   { name: "get_holdings",      schema: getHoldingsInput,      handler: handlers.get_holdings },
-  { name: "follow",            schema: followInput,           handler: handlers.follow },
-  { name: "unfollow",          schema: unfollowInput,         handler: handlers.unfollow },
-  { name: "list_follows",      schema: listFollowsInput,      handler: handlers.list_follows },
   { name: "private_buy",       schema: privateBuyInput,       handler: handlers.private_buy },
   { name: "private_lend",      schema: privateLendInput,      handler: handlers.private_lend },
   { name: "cashout",           schema: cashoutInput,          handler: handlers.cashout },
@@ -92,7 +92,7 @@ async function main() {
   };
 
   const server = new Server(
-    { name: "stealth-trader", version: "0.3.0" },
+    { name: "stealth-trader", version: "0.5.0" },
     { capabilities: { tools: {} } },
   );
 

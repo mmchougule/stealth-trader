@@ -15,6 +15,7 @@ import type { CommandCtx, Deps } from "../types.js";
 import { parseMintFromInput } from "../../parseMint.js";
 import { lamportsToSolStr } from "../format.js";
 import { MIN_TRADE_LAMPORTS } from "../../trade.js";
+import { checkToken } from "../../safety.js";
 
 const ONE_SOL = 1_000_000_000n;
 
@@ -43,6 +44,15 @@ export async function runBuy(_deps: Deps, buy: BuyDeps, ctx: CommandCtx): Promis
   }
   if (lamports < MIN_TRADE_LAMPORTS) {
     await ctx.reply(`minimum trade size is ${lamportsToSolStr(MIN_TRADE_LAMPORTS)} SOL.`);
+    return;
+  }
+
+  // RugCheck gate. checkToken is fail-open (unreachable / error → pass)
+  // so an outage never blocks legit buys, but a confirmed danger verdict
+  // aborts before any SOL moves. Matches b402-trader's buy guard.
+  const safety = await checkToken(mint);
+  if (!safety.pass) {
+    await ctx.reply(`blocked: ${safety.reason}\n\nif you still want it, this token failed an automated rug check.`);
     return;
   }
 
