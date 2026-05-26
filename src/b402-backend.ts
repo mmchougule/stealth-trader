@@ -422,18 +422,10 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
       // Pin the exact note when the caller chose one (Withdraw picker). The
       // SDK's holdings() entries ARE spendable notes; find the one by id and
       // pass it so unshield doesn't fall back to most-recently-shielded only.
-      let note: unknown;
-      if (args.noteId) {
-        const raw = await sdk.holdings({ refresh: true });
-        const entries = Array.isArray(raw) ? raw : raw.holdings;
-        note = entries.find((e: { id?: string }) => e.id === args.noteId);
-        if (!note) throw new Error("note not found or already spent — refresh and try again");
-      }
       const { photonRpc, alt } = await buildPhase9Deps(deps.rpcUrl, deps.cluster);
       const res = await sdk.unshield({
         to: recipient,
         mint,
-        ...(note ? { note } : {}),
         photonRpc,
         alt,
       });

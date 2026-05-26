@@ -160,18 +160,19 @@ export function renderBuyPanel(args: {
     }
   }
 
-  // PUBLIC % chips — 🌐 per-button marker. callbackData carries the exact
-  // lamports so the chosen amount can't drift between render and tap.
+  // PUBLIC % chips — 2 per row so labels don't overlap/truncate on mobile.
+  // callbackData carries the exact lamports so the amount can't drift.
   if (hasPublic) {
-    const row: Keyboard[number] = [];
+    let row: Keyboard[number] = [];
     for (const p of pcts) {
       const amt = (publicUsable * BigInt(p)) / 100n;
       const label = p === 100
         ? `🌐 Max (${lamportsToSolStr(amt)})`
         : `🌐 ${p}% (${lamportsToSolStr(amt)})`;
       row.push({ text: label, callbackData: `buy:amt:${amt.toString()}` });
+      if (row.length === 2) { keyboard.push(row); row = []; }
     }
-    keyboard.push(row);
+    if (row.length) keyboard.push(row);
   }
 
   keyboard.push([{ text: "Cancel", callbackData: "buy:cancel" }]);
