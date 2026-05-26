@@ -16,6 +16,7 @@ import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { NATIVE_MINT } from "@solana/spl-token";
 import { B402Solana } from "@b402ai/solana";
 import type { DbPool } from "./db/index.js";
+import { log } from "./log.js";
 import { deriveUserKeypair } from "./wallet.js";
 import { makeNotePersistence } from "./notePersistence.js";
 import type { SwapBackend } from "./trade.js";
@@ -155,6 +156,18 @@ async function buildPhase9Deps(rpcUrl: string, cluster: "mainnet" | "devnet" | "
   return { photonRpc, alt: new PublicKey(altStr) };
 }
 
+/** List the user's shielded wSOL note values (lamports). Used by the buy path
+ *  to decide recycle-vs-shield: an exact-value match means a private note the
+ *  user can spend directly. Refreshes so a cold instance sees chain state. */
+async function listWsolNotes(sdk: SdkLike): Promise<bigint[]> {
+  const raw = await sdk.holdings({ refresh: true });
+  const entries = Array.isArray(raw) ? raw : raw.holdings;
+  const wsol = NATIVE_MINT.toBase58();
+  return entries
+    .filter((e) => (typeof e.mint === "string" ? e.mint : e.mint.toBase58()) === wsol)
+    .map((e) => (typeof e.amount === "string" ? BigInt(e.amount) : e.amount));
+}
+
 export function makeB402Backend(deps: BackendDeps): WalletBackend {
   const cache = new Map<number, Promise<SdkLike>>();
 
@@ -220,34 +233,66 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
 
   return {
     async privateBuy(args) {
-      // Three-step private buy:
-      //   (1) wrap native SOL → user's wSOL ATA (Solana doesn't have
-      //       a "shield SOL" primitive; b402 takes SPL tokens)
-      //   (2) sdk.shield: pool moves the wSOL ATA balance into a
-      //       shielded note owned by the user's spending key
-      //   (3) sdk.swap: spends that shielded note, lands a new shielded
-      //       note of `args.mint` via the b402 Jupiter adapter
-      // Phase-10 partial-spend will collapse (2)+(3); until then it's
-      // three on-chain txs per private buy.
+      // Two funding paths, decided by whether an exact-match shielded wSOL
+      // note already exists. Ported from b402-trader's shieldAndSwap(intent:
+      // "buy"). The Buy panel makes the choice concrete:
+      //
+      //   PRIVATE (🔒 note tap): args.solLamports == an existing wSOL note's
+      //     value → RECYCLE it. No wrap, no shield. The note is already in the
+      //     pool; we just swap it → token note. Works with ZERO on-chain
+      //     native SOL (the whole point of spending a private note).
+      //
+      //   PUBLIC (🌐 % chip): no exact note → wrap fresh native SOL + shield,
+      //     then swap. Requires on-chain native SOL in the derived wallet.
+      //
+      // CRITICAL: if the swap fails AFTER a fresh shield, roll back by
+      // unshielding the note to the derived wallet. Without this, every
+      // failed swap stranded the user's SOL in an orphan wSOL note and
+      // drained their on-chain native — the bug that broke buys entirely.
       const userKp = deriveUserKeypair(args.tgId, deps.masterSeed);
-      const conn = new Connection(deps.rpcUrl, "confirmed");
-      await wrapSolForShield(conn, userKp, args.solLamports);
       const sdk = await getSdk(args.tgId);
-      await sdk.shield({ mint: NATIVE_MINT, amount: args.solLamports });
-      // swapWithLadder: maxAccounts ladder + route-stale retry. Same
-      // pattern b402-trader uses for production copy-trades. Fixes the
-      // "encoding overruns Uint8Array" / "tx_too_large" failures that
-      // hit when Jupiter routes happen to be too long for the relayer's
-      // tx-build buffer.
-      const res = await swapWithLadder(sdk, {
-        inMint: NATIVE_MINT,
-        outMint: new PublicKey(args.mint),
-        amount: args.solLamports,
-      });
-      const txSignature = res.signature ?? res.sig ?? "";
-      if (!txSignature) throw new Error("SDK returned no signature on swap");
-      const tokensReceived = res.outAmount === undefined ? 0n : BigInt(res.outAmount);
-      return { txSignature, tokensReceived };
+
+      const wsolNotes = await listWsolNotes(sdk);
+      const exact = wsolNotes.find((n) => n === args.solLamports);
+      let freshlyShielded = false;
+
+      if (exact !== undefined) {
+        log.info({ tgId: args.tgId, amount: args.solLamports.toString() }, "buy: recycling exact-match wSOL note (no shield)");
+      } else {
+        // PUBLIC path: wrap native → wSOL ATA, then shield into a note.
+        const conn = new Connection(deps.rpcUrl, "confirmed");
+        await wrapSolForShield(conn, userKp, args.solLamports);
+        await sdk.shield({ mint: NATIVE_MINT, amount: args.solLamports });
+        freshlyShielded = true;
+        log.info({ tgId: args.tgId, amount: args.solLamports.toString() }, "buy: shielded fresh public SOL");
+      }
+
+      try {
+        const res = await swapWithLadder(sdk, {
+          inMint: NATIVE_MINT,
+          outMint: new PublicKey(args.mint),
+          amount: args.solLamports,
+        });
+        const txSignature = res.signature ?? res.sig ?? "";
+        if (!txSignature) throw new Error("SDK returned no signature on swap");
+        const tokensReceived = res.outAmount === undefined ? 0n : BigInt(res.outAmount);
+        return { txSignature, tokensReceived };
+      } catch (swapErr) {
+        // Roll back a fresh shield so the SOL returns to the wallet instead of
+        // being stranded in an unspendable orphan note. Recycled notes are
+        // left intact (they pre-existed; nothing to undo).
+        if (freshlyShielded) {
+          log.warn({ tgId: args.tgId, err: (swapErr as Error).message }, "buy: swap failed after shield — rolling back via unshield");
+          try {
+            const { photonRpc, alt } = await buildPhase9Deps(deps.rpcUrl, deps.cluster);
+            await sdk.unshield({ to: userKp.publicKey, mint: NATIVE_MINT, photonRpc, alt });
+            log.info({ tgId: args.tgId }, "buy: rollback unshield done — wallet restored");
+          } catch (rb) {
+            log.error({ tgId: args.tgId, err: (rb as Error).message }, "buy: rollback unshield FAILED — note stuck; recoverable on a later buy");
+          }
+        }
+        throw swapErr;
+      }
     },
 
     async privateSell(args) {
