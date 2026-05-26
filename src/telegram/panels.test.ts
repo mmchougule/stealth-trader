@@ -59,10 +59,28 @@ const baseDeps: Deps = {
 };
 
 describe("wallet panel", () => {
-  it("replies with the resolved pubkey", async () => {
+  it("shows the deposit address + empty-private section with no backend", async () => {
     const ctx = makeCtx();
     await showWallet(baseDeps, ctx);
-    expect(ctx.replies).toEqual(["pubkey-42"]);
+    expect(ctx.replies[0]).toMatch(/💼 Wallet/);
+    expect(ctx.replies[0]).toMatch(/Private — empty/);
+    expect(ctx.replies[0]).toContain("pubkey-42"); // deposit address still shown
+  });
+
+  it("sums shielded wSOL notes into the Private SOL line", async () => {
+    const ctx = makeCtx();
+    const deps = { ...baseDeps, wallet: {
+      getHoldings: async () => [],
+      cashout: async () => ({ txSignature: "" }),
+      getNotes: async () => [
+        { id: "n1", mint: "So11111111111111111111111111111111111111112", amount: 30_000_000n },
+        { id: "n2", mint: "So11111111111111111111111111111111111111112", amount: 20_000_000n },
+      ],
+    }};
+    await showWallet(deps, ctx);
+    // 0.05 SOL total across 2 notes.
+    expect(ctx.replies[0]).toMatch(/Private/);
+    expect(ctx.replies[0]).toMatch(/0\.0500.*2 notes/s);
   });
 });
 

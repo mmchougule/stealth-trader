@@ -79,6 +79,17 @@ export interface FlowState {
   pendingBuy: Map<number, PendingBuy>;
   sellFlow: Map<number, SellFlow>;
   pendingSell: Map<number, PendingSell>;
+  /** Users who tapped "Buy" on the menu and now owe a pasted contract
+   *  address. The next plain-text message from a member of this set is
+   *  treated as a CA → opens the buy panel. Mirrors b402-trader's
+   *  buyFlow.step === "await_ca". Cleared once the CA is consumed. */
+  awaitBuyCa: Set<number>;
+  /** Users who tapped "Withdraw" and now owe a pasted destination address.
+   *  Checked BEFORE awaitBuyCa / paste-anywhere in the text router because a
+   *  wallet address is base58 and would otherwise parse as a token mint and
+   *  wrongly open a buy panel. The next message from this set is the cashout
+   *  recipient. Cleared once consumed. */
+  awaitWithdrawDest: Set<number>;
 }
 
 export function makeFlowState(): FlowState {
@@ -87,6 +98,8 @@ export function makeFlowState(): FlowState {
     pendingBuy: new Map(),
     sellFlow: new Map(),
     pendingSell: new Map(),
+    awaitBuyCa: new Set(),
+    awaitWithdrawDest: new Set(),
   };
 }
 
@@ -94,6 +107,7 @@ export function makeFlowState(): FlowState {
 export function clearBuy(state: FlowState, tgId: number): void {
   state.buyFlow.delete(tgId);
   state.pendingBuy.delete(tgId);
+  state.awaitBuyCa.delete(tgId);
 }
 
 /** Drop every sell-related entry for a user. */

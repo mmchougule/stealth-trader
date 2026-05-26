@@ -28,6 +28,15 @@ export interface Button {
 /** A keyboard is rows of buttons. Empty rows are dropped by the adapter. */
 export type Keyboard = Button[][];
 
+/**
+ * A persistent reply-keyboard menu: rows of plain button labels that dock at
+ * the bottom of the chat (grammy `Keyboard`, not `InlineKeyboard`). Tapping a
+ * label sends that label as a normal text message, which `bot.hears` catches.
+ * This is the always-visible Buy / Sell / Wallet / Withdraw bar — the thing
+ * that lets a user trade without typing a single command.
+ */
+export type MenuKeyboard = string[][];
+
 export interface CommandCtx {
   tgId: number;
   text: string;
@@ -36,6 +45,10 @@ export interface CommandCtx {
    *  the test recorder don't have to implement it; panels that need buttons
    *  feature-detect it and fall back to plain `reply`. */
   replyWithKeyboard?(message: string, keyboard: Keyboard): Promise<void>;
+  /** Reply and dock a persistent reply-keyboard menu at the bottom of the
+   *  chat. Optional for the same reason as replyWithKeyboard — CLI panels and
+   *  test recorders don't implement it. */
+  replyWithMenu?(message: string, menu: MenuKeyboard): Promise<void>;
 }
 
 /**

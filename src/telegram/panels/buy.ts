@@ -274,7 +274,7 @@ async function runBuyCli(buy: BuyDeps, ctx: CommandCtx, mint: string, amountArg:
  * wrapped — a failure replies a readable line instead of throwing into the
  * polling loop.
  */
-async function openBuyPanel(
+export async function openBuyPanel(
   buy: BuyDeps,
   state: FlowState,
   ctx: CommandCtx,
@@ -491,7 +491,16 @@ export async function onBuyConfirm(
       "",
       "Your wallet does not appear on this trade.",
     ].join("\n"),
-    [[{ text: "Verify on Solscan", url: `https://solscan.io/tx/${res.txSignature}` }]],
+    // Receipt chaining: Verify (link) on its own row, then re-enter the loop
+    // without typing — Buy more re-prompts for a CA, Holdings opens the
+    // sell-side view. Mirrors b402-trader's post-buy keyboard.
+    [
+      [{ text: "Verify on Solscan", url: `https://solscan.io/tx/${res.txSignature}` }],
+      [
+        { text: "Buy more", callbackData: "menu:buy" },
+        { text: "Holdings", callbackData: "menu:holdings" },
+      ],
+    ],
   );
 }
 

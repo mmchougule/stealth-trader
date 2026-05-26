@@ -310,7 +310,15 @@ export async function onSellConfirm(
       "",
       "SOL landed in a fresh shielded note — no link to your sell.",
     ].join("\n"),
-    [[{ text: "Verify on Solscan", url: `https://solscan.io/tx/${res.txSignature}` }]],
+    // Receipt chaining, mirroring the post-buy keyboard: Verify (link), then
+    // re-enter without typing — Withdraw cashes out, Holdings re-lists.
+    [
+      [{ text: "Verify on Solscan", url: `https://solscan.io/tx/${res.txSignature}` }],
+      [
+        { text: "Withdraw", callbackData: "menu:withdraw" },
+        { text: "Holdings", callbackData: "menu:holdings" },
+      ],
+    ],
   );
 }
 

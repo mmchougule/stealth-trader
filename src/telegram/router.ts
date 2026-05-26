@@ -16,23 +16,49 @@
  * map the real grammy ctx onto those shapes and the panel Keyboard onto a
  * grammy InlineKeyboard.
  */
-import { Bot, InlineKeyboard, type Context } from "grammy";
-import type { Deps, CommandCtx, CallbackCtx, Keyboard } from "./types.js";
+import { Bot, InlineKeyboard, Keyboard as ReplyKeyboard, type Context } from "grammy";
+import type { Deps, CommandCtx, CallbackCtx, Keyboard, MenuKeyboard } from "./types.js";
 import { log } from "../log.js";
+import { parseMintFromInput } from "../parseMint.js";
 import { showWallet } from "./panels/wallet.js";
 import { showHoldings } from "./panels/holdings.js";
 import { showLeader } from "./panels/leader.js";
 import { showDiscover } from "./panels/discover.js";
-import { runCashout } from "./panels/cashout.js";
+import { runCashout, startWithdraw, executeCashout } from "./panels/cashout.js";
 import {
-  runBuy, type BuyDeps,
+  runBuy, openBuyPanel, type BuyDeps,
   onBuyCancel, onBuyNote, onBuyAmount, onBuyTab, onBuyNotesMore, onBuyConfirm,
 } from "./panels/buy.js";
 import {
   runSell, type SellDeps,
   onSellMint, onSellNote, onSellCancel, onSellConfirm,
 } from "./panels/sell.js";
-import { makeFlowState } from "./state.js";
+import { makeFlowState, type FlowState } from "./state.js";
+
+// The persistent reply-keyboard menu. These four labels are the entire
+// no-typing surface: tapping one sends the label as a text message, caught by
+// the bot.hears handlers below. Layout + emojis mirror b402-trader's
+// mainMenu() so the two bots feel identical.
+//   Buy / Sell      — the two trade primitives.
+//   Wallet / Withdraw — fund + exit (the privacy unlock).
+const MENU_BUY = "🟢 Buy";
+const MENU_SELL = "🔴 Sell";
+const MENU_WALLET = "💼 Wallet";
+const MENU_WITHDRAW = "📤 Withdraw";
+const MAIN_MENU: MenuKeyboard = [
+  [MENU_BUY, MENU_SELL],
+  [MENU_WALLET, MENU_WITHDRAW],
+];
+
+/** Map the panel-facing MenuKeyboard onto grammy's persistent ReplyKeyboard. */
+function toReplyKeyboard(menu: MenuKeyboard): ReplyKeyboard {
+  const kb = new ReplyKeyboard();
+  for (const row of menu) {
+    for (const label of row) kb.text(label);
+    kb.row();
+  }
+  return kb.resized().persistent();
+}
 
 const SOL = 1_000_000_000n;
 
@@ -75,6 +101,9 @@ export function registerHandlers(bot: Bot, deps: RouterDeps): void {
     reply: async (m) => { await ctx.reply(m); },
     replyWithKeyboard: async (m, kb) => {
       await ctx.reply(m, { reply_markup: toInlineKeyboard(kb), link_preview_options: { is_disabled: true } });
+    },
+    replyWithMenu: async (m, menu) => {
+      await ctx.reply(m, { reply_markup: toReplyKeyboard(menu), link_preview_options: { is_disabled: true } });
     },
   });
 
@@ -171,11 +200,90 @@ export function registerHandlers(bot: Bot, deps: RouterDeps): void {
   bot.callbackQuery(/^sell:note:\d+$/,            onCallback("sell:note",       (c) => onSellNote(deps.sell, flow, c)));
   bot.callbackQuery(/^sell:mint:.+$/,             onCallback("sell:mint",       (c) => onSellMint(deps.sell, flow, c)));
 
+  // ── Persistent-menu taps (bot.hears). A menu button sends its label as a
+  // text message; we catch the label and route to the same panel the slash
+  // command opens. Registered BEFORE the catch-all message:text handler so a
+  // menu tap is consumed here and never falls through to the paste-CA router.
+  bot.hears([MENU_BUY, "Buy"],           handle("menu-buy",      (c) => promptBuyCa(flow, c)));
+  bot.hears([MENU_SELL, "Sell"],         handle("menu-sell",     (c) => runSell(deps, deps.sell, flow, c)));
+  bot.hears([MENU_WALLET, "Wallet"],     handle("menu-wallet",   (c) => showWallet(deps, c)));
+  bot.hears([MENU_WITHDRAW, "Withdraw"], handle("menu-withdraw", (c) => startWithdraw(deps, flow, c)));
+
+  // ── Free-text router. Only plain text that wasn't a command or a menu label
+  // reaches here. If the user just tapped Buy (awaitBuyCa), the next message is
+  // their contract address. Otherwise we paste-anywhere: any message that
+  // parses to a valid mint opens the buy panel; anything else is ignored
+  // silently (no nagging on stray chatter).
+  bot.on("message:text", async (ctx) => {
+    if (!auth(ctx)) return;
+    const tgId = ctx.from?.id ?? 0;
+    // Withdraw-dest FIRST: a wallet address is base58 and would otherwise
+    // parse as a token mint and wrongly open a buy panel.
+    if (flow.awaitWithdrawDest.delete(tgId)) {
+      try {
+        await executeCashout(deps, cmd(ctx), ctx.message.text.trim());
+      } catch (e) {
+        log.error({ tgId, err: (e as Error).message }, "withdraw text router threw");
+        await ctx.reply("something went wrong — try again in a moment.").catch(() => {});
+      }
+      return;
+    }
+    const awaiting = flow.awaitBuyCa.delete(tgId); // consume the flag if set
+    try {
+      const mint = parseMintFromInput(ctx.message.text);
+      if (mint) {
+        await openBuyPanel(deps.buy, flow, cmd(ctx), mint);
+      } else if (awaiting) {
+        await ctx.reply("couldn't read a contract address there — paste a Solana token mint or a Dexscreener/Birdeye link.");
+      }
+      // else: not awaiting + not a mint → ignore.
+    } catch (e) {
+      log.error({ tgId, err: (e as Error).message }, "text router threw");
+      await ctx.reply("something went wrong — try again in a moment.").catch(() => {});
+    }
+  });
+
+  // ── Receipt-chaining + Wallet inline buttons (menu:*). Let a user re-enter
+  // the loop from a receipt without touching the menu bar. onMenu hands the
+  // raw grammy ctx so the existing CommandCtx panels can be reused as-is.
+  const onMenu = (
+    name: string,
+    fn: (ctx: Context) => Promise<void>,
+  ) => async (ctx: Context): Promise<void> => {
+    if (!auth(ctx)) {
+      await ctx.answerCallbackQuery({ text: "not authorized" }).catch(() => {});
+      return;
+    }
+    try {
+      await ctx.answerCallbackQuery().catch(() => {});
+      await fn(ctx);
+    } catch (e) {
+      log.error({ cb: name, tgId: ctx.from?.id, err: (e as Error).message }, "menu callback threw");
+      await ctx.reply("something went wrong — try again in a moment.").catch(() => {});
+    }
+  };
+  bot.callbackQuery("menu:buy",      onMenu("menu:buy",      (ctx) => promptBuyCa(flow, cmd(ctx))));
+  bot.callbackQuery("menu:holdings", onMenu("menu:holdings", (ctx) => showHoldings(deps, cmd(ctx))));
+  bot.callbackQuery("menu:wallet",   onMenu("menu:wallet",   (ctx) => showWallet(deps, cmd(ctx))));
+  bot.callbackQuery("menu:withdraw", onMenu("menu:withdraw", (ctx) => startWithdraw(deps, flow, cmd(ctx))));
+
   // Last-resort error boundary. Anything that still escapes lands here
   // instead of crashing the long-poll loop.
   bot.catch((err) => {
     log.error({ err: err.message, update: err.ctx?.update?.update_id }, "grammy uncaught");
   });
+}
+
+/** Shared "tap Buy → paste a CA" prompt. Sets the awaitBuyCa flag so the next
+ *  plain-text message is treated as a contract address by the text router. */
+async function promptBuyCa(flow: FlowState, ctx: CommandCtx): Promise<void> {
+  flow.awaitBuyCa.add(ctx.tgId);
+  const text = ["Buy a token", "", "Paste the contract address of any Solana token (or a Dexscreener / Birdeye link)."].join("\n");
+  if (ctx.replyWithKeyboard) {
+    await ctx.replyWithKeyboard(text, [[{ text: "Cancel", callbackData: "buy:cancel" }]]);
+  } else {
+    await ctx.reply(text);
+  }
 }
 
 async function startHandler(deps: Deps, ctx: CommandCtx): Promise<void> {
@@ -185,26 +293,23 @@ async function startHandler(deps: Deps, ctx: CommandCtx): Promise<void> {
      ON CONFLICT (tg_id) DO UPDATE SET solana_pubkey = EXCLUDED.solana_pubkey`,
     [ctx.tgId, pubkey],
   );
-  await ctx.reply(
-    [
-      "stealth-trader is ready.",
-      "",
-      "your deposit address:",
-      pubkey,
-      "",
-      "send SOL there, then:",
-      "  /balance                 show your SOL",
-      "  /buy <mint>              open the buy panel (tap to trade)",
-      "  /buy <mint> <sol>        one-shot buy",
-      "  /sell                    pick a token to sell",
-      "  /sell <mint> <amount>    one-shot sell",
-      "  /holdings                shielded balances + sell buttons",
-      "  /leader <wallet>         7-day stats for a wallet",
-      "  /discover                curated leaders",
-      "  /cashout <recipient>     unshield to any address",
-      "  /wallet                  show deposit address",
-    ].join("\n"),
-  );
+  const text = [
+    "🔒 stealth-trader — private trading on Solana",
+    "",
+    "Send any amount of SOL to your deposit address:",
+    pubkey,
+    "",
+    "Auto-credits ~10s after the deposit confirms — you'll get a DM when it lands.",
+    "",
+    "Then tap a button below to trade. No commands to memorize.",
+  ].join("\n");
+  // Dock the persistent Buy / Sell / Wallet / Withdraw menu. This is the
+  // whole no-typing surface — it stays pinned at the bottom of the chat.
+  if (ctx.replyWithMenu) {
+    await ctx.replyWithMenu(text, MAIN_MENU);
+  } else {
+    await ctx.reply(text);
+  }
 }
 
 async function balanceHandler(deps: Deps, ctx: CommandCtx): Promise<void> {
