@@ -319,11 +319,20 @@ async function startHandler(deps: Deps, ctx: CommandCtx): Promise<void> {
 }
 
 async function balanceHandler(deps: Deps, ctx: CommandCtx): Promise<void> {
-  const r = await deps.pool.query(
-    `SELECT sol_balance_lamports FROM stealth.users WHERE tg_id = $1`,
-    [ctx.tgId],
+  // LIVE balances, like b402-trader: public from Solana RPC, private from the
+  // SDK (indexer-backed holdings). Never the DB ledger — that can lag/drift.
+  const WSOL = "So11111111111111111111111111111111111111112";
+  const [publicLamports, shieldedSol] = await Promise.all([
+    deps.publicNativeLamports ? deps.publicNativeLamports(ctx.tgId).catch(() => 0n) : Promise.resolve(0n),
+    deps.wallet?.getNotes
+      ? deps.wallet.getNotes(ctx.tgId, WSOL).then((ns) => ns.reduce((a, n) => a + n.amount, 0n)).catch(() => 0n)
+      : Promise.resolve(0n),
+  ]);
+  const fmt = (l: bigint) => (Number(l) / Number(SOL)).toFixed(4);
+  await ctx.reply(
+    [
+      `🔒 Private: ${fmt(shieldedSol)} SOL`,
+      `🌐 Public:  ${fmt(publicLamports)} SOL`,
+    ].join("\n"),
   );
-  const lamports = r.rowCount && r.rowCount > 0 ? BigInt(r.rows[0].sol_balance_lamports) : 0n;
-  const sol = (Number(lamports) / Number(SOL)).toFixed(4);
-  await ctx.reply(`${sol} SOL  (${lamports.toString()} lamports)`);
 }

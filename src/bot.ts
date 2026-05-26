@@ -216,6 +216,8 @@ async function main(): Promise<void> {
     pool,
     authorizedTgUsers: cfg.authorizedTgUsers,
     resolvePubkey: (tgId) => userPubkey(tgId, masterSeed),
+    publicNativeLamports: async (tgId) =>
+      BigInt(await connection.getBalance(new PublicKey(userPubkey(tgId, masterSeed)), "confirmed")),
     wallet: walletDeps,
     ...(process.env.HELIUS_API_KEY ? { heliusApiKey: process.env.HELIUS_API_KEY } : {}),
     buy: buyDeps,

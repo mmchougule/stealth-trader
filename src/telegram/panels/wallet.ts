@@ -26,15 +26,11 @@ function solStr(lamports: bigint, dp = 4): string {
 export async function showWallet(deps: Deps, ctx: CommandCtx): Promise<void> {
   const addr = deps.resolvePubkey(ctx.tgId);
 
-  // Public ledger SOL (credited by the deposit watcher).
+  // LIVE on-chain native SOL — read fresh via RPC, never the DB ledger.
   let publicLamports = 0n;
   try {
-    const r = await deps.pool.query<{ sol_balance_lamports: string }>(
-      `SELECT sol_balance_lamports FROM stealth.users WHERE tg_id = $1`,
-      [ctx.tgId],
-    );
-    if (r.rowCount && r.rowCount > 0) publicLamports = BigInt(r.rows[0]!.sol_balance_lamports);
-  } catch { /* show 0 on a DB blip */ }
+    if (deps.publicNativeLamports) publicLamports = await deps.publicNativeLamports(ctx.tgId);
+  } catch { /* show 0 on an RPC blip */ }
 
   // Private: shielded wSOL notes + token positions.
   let shieldedSolLamports = 0n;
