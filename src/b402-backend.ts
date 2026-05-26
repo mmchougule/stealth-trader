@@ -135,7 +135,34 @@ interface SdkLike {
   /** Teach the SDK a mint pubkey so holdings()/getNotes() resolve its
    *  Fr-reduced tokenMint back to base58 instead of "unknown:<hex>". */
   learnMint(mint: PublicKey): void;
+  /** Re-sync the note store from on-chain history by `limit` commitments from
+   *  the persisted cursor. Returns how much it ingested so callers can loop
+   *  until caught up (a cold store after a DB reset is hundreds of commitments
+   *  behind; holdings() alone only advances 30/call). */
+  refresh?(opts?: { limit?: number; before?: bigint }):
+    Promise<{ txsScanned?: number; eventsSeen?: number; depositsIngested?: number }>;
   wallet?: { viewingPub: Uint8Array };
+}
+
+/**
+ * Rebuild a cold note store to the chain tip. holdings()/getNotes() only
+ * backfill 30 commitments per call, so a store reset to cursor 0 never catches
+ * up to notes that sit hundreds of commitments deep — the exact reason a
+ * post-DB-reset wallet shows "no shielded notes" despite holding them on-chain.
+ * Loops refresh() until a pass ingests nothing new (or a safety cap). Logged so
+ * the rebuild is visible in `pnpm start`.
+ */
+async function fullBackfill(sdk: SdkLike, tgId: number): Promise<void> {
+  if (!sdk.refresh) return;
+  for (let i = 0; i < 60; i++) {
+    let r: { eventsSeen?: number; depositsIngested?: number };
+    try { r = await sdk.refresh({ limit: 200 }); }
+    catch (e) { log.warn({ tgId, pass: i, err: (e as Error).message }, "note backfill pass failed"); break; }
+    const ingested = r.depositsIngested ?? 0;
+    const seen = r.eventsSeen ?? 0;
+    log.info({ tgId, pass: i, ingested, seen }, "note backfill pass");
+    if (seen === 0 && ingested === 0) break; // caught up to chain tip
+  }
 }
 
 /**
@@ -225,6 +252,14 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
       for (const m of HOT_MINTS) {
         try { sdkWithPersist.learnMint(new PublicKey(m)); } catch { /* ignore */ }
       }
+      // Rebuild the note store to the chain tip. Critical after a DB reset
+      // (cold store at cursor 0) — without this, holdings()/getNotes() only
+      // advance 30 commitments per call and never reach notes that sit
+      // hundreds deep, so the user sees "no shielded notes" despite holding
+      // them. Best-effort + logged; trading still works once it catches up.
+      log.info({ tgId }, "rebuilding note store from chain (backfill)…");
+      await fullBackfill(sdkWithPersist, tgId);
+      log.info({ tgId }, "note store rebuild complete");
       return sdkWithPersist;
     })();
     cache.set(tgId, p);
