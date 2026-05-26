@@ -58,20 +58,25 @@ export interface TradeDeps {
   computeBuyFee?: (lamports: bigint) => bigint;
 }
 
-const defaultBuyFee = (lamports: bigint): bigint => {
+/**
+ * Default buy fee: 0.05% (5 bps) + 0.0003 SOL flat. Exported so the Buy
+ * panel preview can render the SAME number trade.executeBuy will charge —
+ * a preview that disagreed with the on-chain debit would erode trust.
+ */
+export const computeBuyFee = (lamports: bigint): bigint => {
   const bps = (lamports * 5n) / 10_000n; // 5 basis points
   const flat = 300_000n;                  // 0.0003 SOL
   return bps + flat;
 };
 
 export function makeTrade(deps: TradeDeps) {
-  const computeBuyFee = deps.computeBuyFee ?? defaultBuyFee;
+  const computeBuyFeeFn = deps.computeBuyFee ?? computeBuyFee;
 
   async function executeBuyInner(args: BuyArgs): Promise<BuyResult> {
     if (args.solLamports < MIN_TRADE_LAMPORTS) {
       return { ok: false, error: `amount below min trade size (${MIN_TRADE_LAMPORTS} lamports)` };
     }
-    const fee = computeBuyFee(args.solLamports);
+    const fee = computeBuyFeeFn(args.solLamports);
     const totalDebit = args.solLamports + fee;
 
     const debited = await deps.balance.debit(args.tgId, totalDebit, "buy");
