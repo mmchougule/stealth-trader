@@ -489,6 +489,7 @@ export async function onBuyConfirm(
   }
   const tokensHuman = formatNum(Number(res.tokensReceived) / Math.pow(10, p.decimals));
   const sym = p.symbol ? `$${p.symbol}` : shortMint(p.mint);
+  state.lastTxSig.set(ctx.tgId, res.txSignature);
   await ctx.reply(
     [
       `Bought ${tokensHuman} ${sym}`,
@@ -496,11 +497,9 @@ export async function onBuyConfirm(
       "",
       "Your wallet does not appear on this trade.",
     ].join("\n"),
-    // Receipt chaining: Verify (link) on its own row, then re-enter the loop
-    // without typing — Buy more re-prompts for a CA, Holdings opens the
-    // sell-side view. Mirrors b402-trader's post-buy keyboard.
     [
       [{ text: "Verify on Solscan", url: `https://solscan.io/tx/${res.txSignature}` }],
+      [{ text: "Verify privacy", callbackData: "verify:last" }],
       [
         { text: "Buy more", callbackData: "menu:buy" },
         { text: "Holdings", callbackData: "menu:holdings" },

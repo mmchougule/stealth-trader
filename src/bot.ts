@@ -218,6 +218,15 @@ async function main(): Promise<void> {
     resolvePubkey: (tgId) => userPubkey(tgId, masterSeed),
     publicNativeLamports: async (tgId) =>
       BigInt(await connection.getBalance(new PublicKey(userPubkey(tgId, masterSeed)), "confirmed")),
+    verifyTx: async (tgId, sig) => {
+      const tx = await connection.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
+      if (!tx) return null;
+      const keys = (tx.transaction.message as { accountKeys?: Array<{ pubkey: { toBase58(): string } | string; signer: boolean }> }).accountKeys ?? [];
+      const pk = (k: { pubkey: { toBase58(): string } | string }) => typeof k.pubkey === "string" ? k.pubkey : k.pubkey.toBase58();
+      const accounts = keys.map(pk);
+      const userPk = userPubkey(tgId, masterSeed);
+      return { accounts, signers: keys.filter((k) => k.signer).map(pk), userInTx: accounts.includes(userPk), userPk };
+    },
     wallet: walletDeps,
     ...(process.env.HELIUS_API_KEY ? { heliusApiKey: process.env.HELIUS_API_KEY } : {}),
     buy: buyDeps,

@@ -94,6 +94,8 @@ export interface FlowState {
   pendingSell: Map<number, PendingSell>;
   /** Withdraw: destination + the note list shown, awaiting a note tap. */
   withdrawFlow: Map<number, WithdrawFlow>;
+  /** Last on-chain tx signature per user, for the "Verify privacy" button. */
+  lastTxSig: Map<number, string>;
   /** Users who tapped "Buy" on the menu and now owe a pasted contract
    *  address. The next plain-text message from a member of this set is
    *  treated as a CA → opens the buy panel. Mirrors b402-trader's
@@ -114,6 +116,7 @@ export function makeFlowState(): FlowState {
     sellFlow: new Map(),
     pendingSell: new Map(),
     withdrawFlow: new Map(),
+    lastTxSig: new Map(),
     awaitBuyCa: new Set(),
     awaitWithdrawDest: new Set(),
   };

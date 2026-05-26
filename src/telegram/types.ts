@@ -105,6 +105,15 @@ export interface Deps {
    *  getAccountSnapshot.publicSol. Wallet + /balance display this, NOT the DB
    *  ledger, so the user always sees real on-chain state. */
   publicNativeLamports?(tgId: number): Promise<bigint>;
+  /** Fetch a confirmed tx and report whether the user's derived key appears in
+   *  its accountKeys — the on-chain proof the relayer (not the user) signed it.
+   *  null = tx not found yet (still indexing). */
+  verifyTx?(tgId: number, sig: string): Promise<{
+    accounts: string[];
+    signers: string[];
+    userInTx: boolean;
+    userPk: string;
+  } | null>;
   /** Helius API key. Optional — /leader gracefully returns "set HELIUS_API_KEY"
    *  when missing instead of erroring out. */
   heliusApiKey?: string;

@@ -316,16 +316,16 @@ export async function onSellConfirm(
     await ctx.reply(`sell failed: ${res.error}`);
     return;
   }
+  state.lastTxSig.set(ctx.tgId, res.txSignature);
   await ctx.reply(
     [
       `Sold for +${lamportsToSolStr(res.solReceived, 6)} SOL`,
       "",
       "SOL landed in a fresh shielded note — no link to your sell.",
     ].join("\n"),
-    // Receipt chaining, mirroring the post-buy keyboard: Verify (link), then
-    // re-enter without typing — Withdraw cashes out, Holdings re-lists.
     [
       [{ text: "Verify on Solscan", url: `https://solscan.io/tx/${res.txSignature}` }],
+      [{ text: "Verify privacy", callbackData: "verify:last" }],
       [
         { text: "Withdraw", callbackData: "menu:withdraw" },
         { text: "Holdings", callbackData: "menu:holdings" },

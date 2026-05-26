@@ -27,6 +27,7 @@ import { showDiscover } from "./panels/discover.js";
 import {
   runCashout, startWithdraw, presentWithdrawNotes, onWithdrawNote, onWithdrawCancel,
 } from "./panels/cashout.js";
+import { showVerify } from "./panels/verify.js";
 import {
   runBuy, openBuyPanel, type BuyDeps,
   onBuyCancel, onBuyNote, onBuyAmount, onBuyTab, onBuyNotesMore, onBuyConfirm,
@@ -186,6 +187,7 @@ export function registerHandlers(bot: Bot, deps: RouterDeps): void {
   bot.command("cashout",  handle("cashout",  (c) => runCashout(deps, c)));
   bot.command("buy",      handle("buy",      (c) => runBuy(deps, deps.buy, flow, c)));
   bot.command("sell",     handle("sell",     (c) => runSell(deps, deps.sell, flow, c)));
+  bot.command("verify",   handle("verify",   (c) => showVerify(deps, flow, c)));
 
   // Buy panel callbacks. Order: most-specific prefixes first so a regex can't
   // shadow a longer one (grammy matches in registration order).
@@ -272,6 +274,7 @@ export function registerHandlers(bot: Bot, deps: RouterDeps): void {
   bot.callbackQuery("menu:holdings", onMenu("menu:holdings", (ctx) => showHoldings(deps, cmd(ctx))));
   bot.callbackQuery("menu:wallet",   onMenu("menu:wallet",   (ctx) => showWallet(deps, cmd(ctx))));
   bot.callbackQuery("menu:withdraw", onMenu("menu:withdraw", (ctx) => startWithdraw(deps, flow, cmd(ctx))));
+  bot.callbackQuery("verify:last",   onMenu("verify:last",   (ctx) => showVerify(deps, flow, cmd(ctx))));
 
   // Last-resort error boundary. Anything that still escapes lands here
   // instead of crashing the long-poll loop.
