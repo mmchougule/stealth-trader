@@ -108,6 +108,14 @@ async function main(): Promise<void> {
         const r = await backend.privateSell(args);
         return { ok: true as const, txSignature: r.txSignature, solReceived: r.solReceived };
       } catch (e) {
+        // Log the real backend error here — the panel only shows the user a
+        // one-line "sell failed", and the router's onCallback wrapper never
+        // sees this (it's a returned envelope, not a throw). Without this log
+        // the failure is invisible in `pnpm start`.
+        log.error(
+          { tgId: args.tgId, mint: args.mint, rawAmount: args.rawAmount.toString(), err: (e as Error).message, stack: (e as Error).stack },
+          "privateSell failed",
+        );
         return { ok: false as const, error: (e as Error).message };
       }
     },

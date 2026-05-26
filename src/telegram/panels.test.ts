@@ -16,7 +16,7 @@ import {
 } from "./panels/cashout.js";
 import type { CallbackCtx, Keyboard } from "./types.js";
 import { runBuy, type BuyDeps } from "./panels/buy.js";
-import { runSell, type SellDeps } from "./panels/sell.js";
+import { runSell, openSellTokenList, type SellDeps } from "./panels/sell.js";
 import { renderLeaderStats } from "./panels/leader.js";
 import { makeFlowState } from "./state.js";
 import type { LeaderStats } from "../leader-stats.js";
@@ -290,6 +290,27 @@ describe("sell panel — CLI fast-path", () => {
     const ctx = makeCtx(`/sell ${mint} 1000`);
     await runSell(baseDeps, makeSellDeps(), makeFlowState(), ctx);
     expect(ctx.replies[0]).toMatch(/sell backend not wired/);
+  });
+
+  it("a menu tap ('🔴 Sell') opens the token list, NOT the usage error", async () => {
+    // Regression: "🔴 Sell".split(/\s+/).slice(1) === ["Sell"] (length 1),
+    // which used to hit the 1-arg usage branch. Menu taps must show the list.
+    const ctx = makeCtx("🔴 Sell");
+    const sell = makeSellDeps({ holdings: async () => [
+      { mint, amount: "1000000", decimals: 6, symbol: "BAGS" },
+    ]});
+    await runSell(baseDeps, sell, makeFlowState(), ctx);
+    expect(ctx.replies[0]).not.toMatch(/usage/);
+    expect(ctx.replies[0]).toMatch(/Sell which token|BAGS/);
+  });
+
+  it("openSellTokenList renders the holdings as a picker", async () => {
+    const ctx = makeCtx();
+    const sell = makeSellDeps({ holdings: async () => [
+      { mint, amount: "1000000", decimals: 6, symbol: "BAGS" },
+    ]});
+    await openSellTokenList(sell, ctx);
+    expect(ctx.replies[0]).toMatch(/BAGS/);
   });
 
   it("executes a one-shot sell and renders the receipt", async () => {

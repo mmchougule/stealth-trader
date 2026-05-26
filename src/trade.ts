@@ -16,6 +16,7 @@
  * runs without RPC, Helius, or Postgres.
  */
 import { withUserSerial } from "./userLock.js";
+import { log } from "./log.js";
 
 export const MIN_TRADE_LAMPORTS = 1_000_000n; // 0.001 SOL hard floor
 
@@ -99,6 +100,12 @@ export function makeTrade(deps: TradeDeps) {
       // this, a swap failure silently consumes user balance.
       await deps.balance.credit(args.tgId, totalDebit, "buy_refund").catch(() => {});
       const msg = e instanceof Error ? e.message : String(e);
+      // Log the real swap error + stack — the panel only shows the user a
+      // one-line "buy failed"; without this the cause is invisible.
+      log.error(
+        { tgId: args.tgId, mint: args.mint, solLamports: args.solLamports.toString(), err: msg, stack: e instanceof Error ? e.stack : undefined },
+        "privateBuy failed (refunded)",
+      );
       return { ok: false, error: msg };
     }
   }

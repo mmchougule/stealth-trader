@@ -32,7 +32,7 @@ import {
   onBuyCancel, onBuyNote, onBuyAmount, onBuyTab, onBuyNotesMore, onBuyConfirm,
 } from "./panels/buy.js";
 import {
-  runSell, type SellDeps,
+  runSell, openSellTokenList, type SellDeps,
   onSellMint, onSellNote, onSellCancel, onSellConfirm,
 } from "./panels/sell.js";
 import { makeFlowState, type FlowState } from "./state.js";
@@ -211,7 +211,7 @@ export function registerHandlers(bot: Bot, deps: RouterDeps): void {
   // command opens. Registered BEFORE the catch-all message:text handler so a
   // menu tap is consumed here and never falls through to the paste-CA router.
   bot.hears([MENU_BUY, "Buy"],           handle("menu-buy",      (c) => promptBuyCa(flow, c)));
-  bot.hears([MENU_SELL, "Sell"],         handle("menu-sell",     (c) => runSell(deps, deps.sell, flow, c)));
+  bot.hears([MENU_SELL, "Sell"],         handle("menu-sell",     (c) => openSellTokenList(deps.sell, c)));
   bot.hears([MENU_WALLET, "Wallet"],     handle("menu-wallet",   (c) => showWallet(deps, c)));
   bot.hears([MENU_WITHDRAW, "Withdraw"], handle("menu-withdraw", (c) => startWithdraw(deps, flow, c)));
 

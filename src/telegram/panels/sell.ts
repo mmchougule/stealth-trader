@@ -140,19 +140,31 @@ export function renderSellPreview(args: {
 // Command: /sell
 // ---------------------------------------------------------------------------
 
+/** Open the token picker (the list of sellable holdings). Shared by `/sell`
+ *  with no args and the 🔴 Sell menu tap — the menu label is "🔴 Sell", whose
+ *  whitespace-split would otherwise look like a 1-arg CLI call and wrongly hit
+ *  the usage error. Both entries must show the same list. */
+export async function openSellTokenList(sell: SellDeps, ctx: CommandCtx): Promise<void> {
+  const holdings = await sell.holdings(ctx.tgId).catch(() => []);
+  const view = renderSellTokenList(holdings);
+  await replyKb(ctx, view.text, view.keyboard);
+}
+
 export async function runSell(
   _deps: Deps,
   sell: SellDeps,
   _state: FlowState,
   ctx: CommandCtx,
 ): Promise<void> {
-  const parts = ctx.text.trim().split(/\s+/).slice(1);
+  // Only treat as a CLI sell when the FIRST token is a real /command. A menu
+  // tap ("🔴 Sell" / "Sell") or a bare "/sell" → token picker.
+  const raw = ctx.text.trim();
+  const isCliSell = raw.startsWith("/sell");
+  const parts = raw.split(/\s+/).slice(1);
 
-  // No args → open the token picker.
-  if (parts.length === 0) {
-    const holdings = await sell.holdings(ctx.tgId).catch(() => []);
-    const view = renderSellTokenList(holdings);
-    await replyKb(ctx, view.text, view.keyboard);
+  // No CLI args (menu tap or bare /sell) → open the token picker.
+  if (!isCliSell || parts.length === 0) {
+    await openSellTokenList(sell, ctx);
     return;
   }
 
