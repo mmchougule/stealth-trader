@@ -11,7 +11,10 @@ import type { CommandCtx, Deps } from "./types.js";
 import { showWallet } from "./panels/wallet.js";
 import { showHoldings, renderHoldings } from "./panels/holdings.js";
 import { showDiscover } from "./panels/discover.js";
-import { runCashout } from "./panels/cashout.js";
+import {
+  runCashout, renderWithdrawNotes, onWithdrawNote, presentWithdrawNotes,
+} from "./panels/cashout.js";
+import type { CallbackCtx, Keyboard } from "./types.js";
 import { runBuy, type BuyDeps } from "./panels/buy.js";
 import { runSell, type SellDeps } from "./panels/sell.js";
 import { renderLeaderStats } from "./panels/leader.js";
@@ -157,6 +160,101 @@ describe("cashout panel", () => {
     await runCashout(deps, ctx);
     expect(cashout).toHaveBeenCalledWith({ tgId: 42, recipient });
     expect(ctx.replies[0]).toMatch(/sig: SIG/);
+  });
+});
+
+// CallbackCtx recorder for tap-handler tests.
+function makeCbCtx(data: string): CallbackCtx & { replies: Array<{ text: string; kb?: Keyboard }>; edits: string[] } {
+  const replies: Array<{ text: string; kb?: Keyboard }> = [];
+  const edits: string[] = [];
+  return {
+    tgId: 42,
+    data,
+    replies,
+    edits,
+    async answer() { /* noop */ },
+    async editText(m) { edits.push(m); },
+    async reply(m, kb) { replies.push({ text: m, ...(kb ? { kb } : {}) }); },
+  };
+}
+
+describe("withdraw note picker", () => {
+  const dest = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
+
+  it("renders one Send button per note + Cancel", () => {
+    const v = renderWithdrawNotes(dest, [30_000_000n, 20_000_000n], 2);
+    expect(v.text).toMatch(/Send to: DezXAZ…B263/);
+    const labels = v.keyboard.flat().map((b) => b.text);
+    expect(labels).toContain("Send 0.0300 SOL");
+    expect(labels).toContain("Send 0.0200 SOL");
+    expect(labels).toContain("Cancel");
+    expect(v.keyboard.flat().find((b) => b.text === "Cancel")!.callbackData).toBe("wd:cancel");
+  });
+
+  it("presentWithdrawNotes rejects a malformed address and re-arms", async () => {
+    const flow = makeFlowState();
+    const ctx = makeCtx();
+    const deps = { ...baseDeps, wallet: {
+      getHoldings: async () => [],
+      cashout: async () => ({ txSignature: "" }),
+      getNotes: async () => [{ id: "n1", mint: "So11111111111111111111111111111111111111112", amount: 10_000_000n }],
+    }};
+    await presentWithdrawNotes(deps, flow, ctx, "not-an-address");
+    expect(ctx.replies[0]).toMatch(/doesn't look like a Solana address/);
+    expect(flow.awaitWithdrawDest.has(42)).toBe(true); // re-armed for retry
+  });
+
+  it("onWithdrawNote unshields the EXACT picked note id", async () => {
+    const flow = makeFlowState();
+    flow.withdrawFlow.set(42, {
+      dest,
+      notes: [{ id: "note-A", amount: 30_000_000n }, { id: "note-B", amount: 20_000_000n }],
+    });
+    const cashout = vi.fn(async () => ({ txSignature: "WSIG" }));
+    const deps = { ...baseDeps, wallet: {
+      getHoldings: async () => [],
+      cashout,
+    }};
+    const ctx = makeCbCtx("wd:note:1"); // pick the second note
+    await onWithdrawNote(deps, flow, ctx);
+    expect(cashout).toHaveBeenCalledWith({ tgId: 42, recipient: dest, noteId: "note-B" });
+    expect(ctx.replies[0]!.text).toMatch(/Sent 0\.0200 SOL/);
+    expect(flow.withdrawFlow.has(42)).toBe(false); // torn down
+  });
+
+  it("onWithdrawNote rejects a stale index", async () => {
+    const flow = makeFlowState(); // no withdrawFlow for 42
+    const cashout = vi.fn(async () => ({ txSignature: "X" }));
+    const deps = { ...baseDeps, wallet: { getHoldings: async () => [], cashout } };
+    await onWithdrawNote(deps, flow, makeCbCtx("wd:note:0"));
+    expect(cashout).not.toHaveBeenCalled();
+  });
+});
+
+describe("holdings PnL", () => {
+  it("renders a green PnL line when value > invested", () => {
+    const v = renderHoldings([
+      { mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", amount: "1000000", decimals: 6, symbol: "BAGS",
+        valueLamports: 15_000_000n, investedLamports: 10_000_000n },
+    ]);
+    expect(v.text).toMatch(/≈ 0\.015000 SOL/);
+    expect(v.text).toMatch(/PnL: \+0\.005000 SOL\s+\(\+50\.0%\)/);
+  });
+
+  it("renders a red PnL line when value < invested", () => {
+    const v = renderHoldings([
+      { mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", amount: "1000000", decimals: 6, symbol: "BAGS",
+        valueLamports: 4_000_000n, investedLamports: 10_000_000n },
+    ]);
+    expect(v.text).toMatch(/PnL: -0\.006000 SOL\s+\(-60\.0%\)/);
+  });
+
+  it("omits PnL when cost basis is unknown (SDK-only fallback)", () => {
+    const v = renderHoldings([
+      { mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", amount: "1000000", decimals: 6 },
+    ]);
+    expect(v.text).not.toMatch(/PnL:/);
+    expect(v.keyboard.flat()[0]!.text).toBe("Sell DezXAZ…B263");
   });
 });
 

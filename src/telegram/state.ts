@@ -69,6 +69,19 @@ export interface PendingSell {
   tokenAmount: bigint;
 }
 
+/** Withdraw flow: a destination is locked in; the user is picking which
+ *  shielded SOL note to unshield. One note per tx, so each button is one note;
+ *  `id` pins it for the SDK so older notes are reachable (not rightmost-only).
+ *  Indexed by `wd:note:<i>` into `notes`. */
+export interface WithdrawNote {
+  id: string;
+  amount: bigint;
+}
+export interface WithdrawFlow {
+  dest: string;
+  notes: WithdrawNote[];
+}
+
 /**
  * The mutable surface the router owns and threads into the callback
  * handlers. Kept as one object so tests can construct a fresh, isolated
@@ -79,6 +92,8 @@ export interface FlowState {
   pendingBuy: Map<number, PendingBuy>;
   sellFlow: Map<number, SellFlow>;
   pendingSell: Map<number, PendingSell>;
+  /** Withdraw: destination + the note list shown, awaiting a note tap. */
+  withdrawFlow: Map<number, WithdrawFlow>;
   /** Users who tapped "Buy" on the menu and now owe a pasted contract
    *  address. The next plain-text message from a member of this set is
    *  treated as a CA → opens the buy panel. Mirrors b402-trader's
@@ -98,6 +113,7 @@ export function makeFlowState(): FlowState {
     pendingBuy: new Map(),
     sellFlow: new Map(),
     pendingSell: new Map(),
+    withdrawFlow: new Map(),
     awaitBuyCa: new Set(),
     awaitWithdrawDest: new Set(),
   };
@@ -114,4 +130,10 @@ export function clearBuy(state: FlowState, tgId: number): void {
 export function clearSell(state: FlowState, tgId: number): void {
   state.sellFlow.delete(tgId);
   state.pendingSell.delete(tgId);
+}
+
+/** Drop every withdraw-related entry for a user. */
+export function clearWithdraw(state: FlowState, tgId: number): void {
+  state.withdrawFlow.delete(tgId);
+  state.awaitWithdrawDest.delete(tgId);
 }

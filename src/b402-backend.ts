@@ -52,8 +52,10 @@ export interface WalletBackend extends SwapBackend {
   /** Return shielded balances for the user, one row per mint. */
   getHoldings(tgId: number): Promise<Holding[]>;
   /** Unshield to a recipient. mint defaults to wSOL (so the recipient
-   *  receives native SOL through the wSOL→SOL unwrap inside the SDK). */
-  cashout(args: { tgId: number; recipient: string; mint?: string }): Promise<{ txSignature: string }>;
+   *  receives native SOL through the wSOL→SOL unwrap inside the SDK).
+   *  `noteId` pins the exact shielded note to spend; omitting it lets the
+   *  SDK fall back to its most-recently-shielded note. */
+  cashout(args: { tgId: number; recipient: string; mint?: string; noteId?: string }): Promise<{ txSignature: string }>;
   /** Lend a shielded token into Kamino. Burns one shielded note, mints a
    *  Kamino voucher note. Mainnet only (Kamino isn't on devnet). `amount`
    *  must equal one existing note's value — call `getNotes` first if you
@@ -75,7 +77,7 @@ interface SdkLike {
   holdings(opts?: { mint?: PublicKey; refresh?: boolean }):
     Promise<{ holdings: Array<{ id: string; mint: string | PublicKey; amount: string | bigint; decimals?: number }> }
             | Array<{ id: string; mint: string | PublicKey; amount: string | bigint; decimals?: number }>>;
-  unshield(opts: { to: PublicKey; mint?: PublicKey; photonRpc?: unknown; alt?: PublicKey }):
+  unshield(opts: { to: PublicKey; mint?: PublicKey; note?: unknown; photonRpc?: unknown; alt?: PublicKey }):
     Promise<{ signature?: string; sig?: string }>;
   lend(opts: { mint: PublicKey; amount: bigint; market?: PublicKey }):
     Promise<{ signature?: string; sig?: string }>;
@@ -252,10 +254,21 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
         const conn = new Connection(deps.rpcUrl, "confirmed");
         await ensureRecipientAta(conn, deps.operatorFeeKeypair, recipient, mint);
       }
+      // Pin the exact note when the caller chose one (Withdraw picker). The
+      // SDK's holdings() entries ARE spendable notes; find the one by id and
+      // pass it so unshield doesn't fall back to most-recently-shielded only.
+      let note: unknown;
+      if (args.noteId) {
+        const raw = await sdk.holdings({ refresh: true });
+        const entries = Array.isArray(raw) ? raw : raw.holdings;
+        note = entries.find((e: { id?: string }) => e.id === args.noteId);
+        if (!note) throw new Error("note not found or already spent — refresh and try again");
+      }
       const { photonRpc, alt } = await buildPhase9Deps(deps.rpcUrl, deps.cluster);
       const res = await sdk.unshield({
         to: recipient,
         mint,
+        ...(note ? { note } : {}),
         photonRpc,
         alt,
       });

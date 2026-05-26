@@ -26,6 +26,7 @@ import { makeTrade, computeBuyFee } from "./trade.js";
 import { registerHandlers } from "./telegram/router.js";
 import { startDepositWatcher } from "./deposits.js";
 import { getTokenInfo, getTokenDecimals, getQuote, SOL_MINT } from "./jupiter.js";
+import { listHoldings } from "./holdings.js";
 
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
@@ -124,12 +125,33 @@ async function main(): Promise<void> {
     },
   };
 
+  // Compose the wallet dep: the SDK-backed backend plus the cost-basis ledger
+  // (for /holdings PnL) and a SOL quote. localHoldings reads stealth.holdings
+  // (what the user paid); quoteSolOut prices the position now.
+  const walletDeps = {
+    ...backend,
+    localHoldings: async (tgId: number) => {
+      const rows = await listHoldings(tgId);
+      return rows.map((h) => ({
+        mint: h.mint,
+        amount: h.amount,
+        decimals: h.decimals,
+        symbol: h.symbol,
+        totalInvestedLamports: BigInt(h.total_invested_lamports),
+      }));
+    },
+    quoteSolOut: async (mint: string, rawAmount: bigint): Promise<bigint | null> => {
+      const q = await getQuote(mint, SOL_MINT, rawAmount, 100).catch(() => null);
+      return q ? BigInt(q.outAmount) : null;
+    },
+  };
+
   const bot = new Bot(cfg.telegramBotToken);
   registerHandlers(bot, {
     pool,
     authorizedTgUsers: cfg.authorizedTgUsers,
     resolvePubkey: (tgId) => userPubkey(tgId, masterSeed),
-    wallet: backend,
+    wallet: walletDeps,
     ...(process.env.HELIUS_API_KEY ? { heliusApiKey: process.env.HELIUS_API_KEY } : {}),
     buy: buyDeps,
     sell: sellDeps,

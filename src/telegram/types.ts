@@ -75,11 +75,24 @@ export interface CallbackCtx {
 
 export interface WalletBackendCtx {
   getHoldings(tgId: number): Promise<Array<{ mint: string; amount: string; decimals: number }>>;
-  cashout(args: { tgId: number; recipient: string; mint?: string }): Promise<{ txSignature: string }>;
+  /** Unshield to `recipient`. `noteId` pins the exact shielded note to spend
+   *  (the SDK consumes one note per unshield tx; omitting it falls back to the
+   *  SDK's most-recently-shielded note, which can't reach older notes without
+   *  an indexer). The Withdraw note-picker always passes a noteId. */
+  cashout(args: { tgId: number; recipient: string; mint?: string; noteId?: string }): Promise<{ txSignature: string }>;
   /** Per-note view of the shielded position. The Buy panel lists spendable
-   *  wSOL notes; the Sell panel lists token notes. Each note is one tappable
-   *  amount because the adapt circuit consumes exactly one note per swap. */
+   *  wSOL notes; the Sell panel lists token notes; the Withdraw picker lists
+   *  wSOL notes. Each note is one tappable amount because the adapt/unshield
+   *  circuits consume exactly one note per tx. `id` pins the note for cashout. */
   getNotes?(tgId: number, mint?: string): Promise<Array<{ id: string; mint: string; amount: bigint }>>;
+  /** Local cost-basis ledger (stealth.holdings): per-mint amount + total SOL
+   *  invested, the source for PnL. Distinct from getHoldings (SDK shielded
+   *  view) — this carries what the user PAID. Optional so a bare instance
+   *  still type-checks; the holdings panel degrades to no-PnL without it. */
+  localHoldings?(tgId: number): Promise<Array<{ mint: string; amount: string; decimals: number; symbol: string | null; totalInvestedLamports: bigint }>>;
+  /** Estimated SOL out (lamports) for selling `rawAmount` of `mint`. Used to
+   *  value holdings for PnL. null = no quote. */
+  quoteSolOut?(mint: string, rawAmount: bigint): Promise<bigint | null>;
 }
 
 export interface Deps {

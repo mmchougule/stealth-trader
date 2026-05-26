@@ -24,7 +24,9 @@ import { showWallet } from "./panels/wallet.js";
 import { showHoldings } from "./panels/holdings.js";
 import { showLeader } from "./panels/leader.js";
 import { showDiscover } from "./panels/discover.js";
-import { runCashout, startWithdraw, executeCashout } from "./panels/cashout.js";
+import {
+  runCashout, startWithdraw, presentWithdrawNotes, onWithdrawNote, onWithdrawCancel,
+} from "./panels/cashout.js";
 import {
   runBuy, openBuyPanel, type BuyDeps,
   onBuyCancel, onBuyNote, onBuyAmount, onBuyTab, onBuyNotesMore, onBuyConfirm,
@@ -200,6 +202,10 @@ export function registerHandlers(bot: Bot, deps: RouterDeps): void {
   bot.callbackQuery(/^sell:note:\d+$/,            onCallback("sell:note",       (c) => onSellNote(deps.sell, flow, c)));
   bot.callbackQuery(/^sell:mint:.+$/,             onCallback("sell:mint",       (c) => onSellMint(deps.sell, flow, c)));
 
+  // Withdraw note-picker callbacks.
+  bot.callbackQuery("wd:cancel",                  onCallback("wd:cancel",       (c) => onWithdrawCancel(flow, c)));
+  bot.callbackQuery(/^wd:note:\d+$/,              onCallback("wd:note",         (c) => onWithdrawNote(deps, flow, c)));
+
   // ── Persistent-menu taps (bot.hears). A menu button sends its label as a
   // text message; we catch the label and route to the same panel the slash
   // command opens. Registered BEFORE the catch-all message:text handler so a
@@ -221,7 +227,7 @@ export function registerHandlers(bot: Bot, deps: RouterDeps): void {
     // parse as a token mint and wrongly open a buy panel.
     if (flow.awaitWithdrawDest.delete(tgId)) {
       try {
-        await executeCashout(deps, cmd(ctx), ctx.message.text.trim());
+        await presentWithdrawNotes(deps, flow, cmd(ctx), ctx.message.text.trim());
       } catch (e) {
         log.error({ tgId, err: (e as Error).message }, "withdraw text router threw");
         await ctx.reply("something went wrong — try again in a moment.").catch(() => {});
