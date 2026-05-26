@@ -121,27 +121,21 @@ For production deployments, set `OPERATOR_FEE_KEYPAIR_PATH` to a keypair file wi
 ## Usage (Telegram)
 
 ```
-/start                            tap-to-follow chips + your deposit address
+/start                            welcome + your deposit address
 /wallet                           your deposit address (where to send SOL)
 /balance                          public SOL balance you can spend
 
-/buy <mint>                       open the Buy panel:
-                                    Private balance → spend an existing shielded note
-                                    Public balance  → shield fresh SOL and swap
-                                    Each path is a guaranteed-spendable button.
-
-/sell <mint>                      open the Sell panel — pick a shielded note to sell
-/holdings                         per-mint shielded balances + dust summary
-
-/follow <wallet> <sol>            mirror every buy from a leader privately
-/follows                          list active follows
-/unfollow <wallet>                stop mirroring
+/buy <mint> <sol>                 private buy — shield fresh SOL and swap
+/sell <mint> <raw-amount>         private sell (v0.6 — backend stub today)
+/holdings                         per-mint shielded balances
 
 /leader <wallet>                  7-day stats — PnL, hit rate, top mints
-/discover                         top vetted leaders, tap to follow
+/discover                         curated leaders (paste any into /leader)
 
-/cashout <recipient>              unshield to any wallet (no link to deposit)
+/cashout <recipient> [mint]       unshield to any wallet (no link to deposit)
 ```
+
+Copy-trade (`/follow`, `/follows`, `/unfollow`) lands in v0.6 once the hosted Helius webhook proxy ships — until then end-users would need ngrok to receive leader events. The Buy / Sell / Cashout inline-keyboard wizards also land in v0.6; v0.5 ships the command-line form so the pipeline is exercisable end-to-end.
 
 ## MCP tools
 
