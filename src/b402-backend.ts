@@ -70,7 +70,7 @@ interface SdkLike {
   ready(): Promise<void>;
   shield(opts: { mint: PublicKey; amount: bigint }):
     Promise<{ signature?: string; sig?: string }>;
-  swap(opts: { inMint: PublicKey; outMint: PublicKey; amount: bigint; maxAccounts?: number; slippageBps?: number }):
+  swap(opts: { inMint: PublicKey; outMint: PublicKey; amount: bigint; maxAccounts?: number; slippageBps?: number; dexes?: string }):
     Promise<{ signature?: string; sig?: string; outAmount?: bigint | string }>;
   holdings(opts?: { mint?: PublicKey; refresh?: boolean }):
     Promise<{ holdings: Array<{ id: string; mint: string | PublicKey; amount: string | bigint; decimals?: number }> }
