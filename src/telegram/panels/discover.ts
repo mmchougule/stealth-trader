@@ -12,7 +12,16 @@ import { shortMint } from "../format.js";
 
 export async function showDiscover(_deps: Deps, ctx: CommandCtx): Promise<void> {
   if (RECOMMENDED_LEADERS.length === 0) {
-    await ctx.reply("no recommended leaders configured.");
+    await ctx.reply(
+      [
+        "No curated leaders configured for this bot.",
+        "",
+        "Check any wallet's 7-day stats yourself:",
+        "  /leader <wallet>",
+        "",
+        "Operators: set STEALTH_DISCOVER_LEADERS to seed a starter list.",
+      ].join("\n"),
+    );
     return;
   }
   const lines: string[] = [

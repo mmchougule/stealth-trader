@@ -10,7 +10,7 @@ import {
   type HeliusEnhancedTx,
   WSOL_MINT,
 } from "./leader-stats.js";
-import { topRecommended, RECOMMENDED_LEADERS } from "./discover-leaders.js";
+import { parseLeaderConfig } from "./discover-leaders.js";
 
 const WALLET = "Fwallet11111111111111111111111111111111111";
 const MINT_A = "MintAAAA1111111111111111111111111111111111";
@@ -147,17 +147,30 @@ describe("leader-stats.computeStats", () => {
   });
 });
 
-describe("discover-leaders", () => {
-  it("topRecommended returns at most N entries", () => {
-    expect(topRecommended(3).length).toBe(3);
-    expect(topRecommended(99).length).toBe(RECOMMENDED_LEADERS.length);
+describe("discover-leaders config", () => {
+  it("returns empty for unset/blank config", () => {
+    expect(parseLeaderConfig(undefined)).toEqual([]);
+    expect(parseLeaderConfig("")).toEqual([]);
+    expect(parseLeaderConfig("   ")).toEqual([]);
   });
 
-  it("every recommended leader has a non-empty wallet, label, and blurb", () => {
-    for (const r of RECOMMENDED_LEADERS) {
-      expect(r.wallet.length).toBeGreaterThanOrEqual(32);
-      expect(r.label.length).toBeGreaterThan(0);
-      expect(r.blurb.length).toBeGreaterThan(0);
-    }
+  it("parses wallet|label|blurb entries split by ;", () => {
+    const w = "9BkpVwAmVMEsqxtQcBbdPtUpXoAxQxEGgDn2RufLrw9P";
+    const out = parseLeaderConfig(`${w}|scalper|90% win, 8m hold`);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toEqual({ wallet: w, label: "scalper", blurb: "90% win, 8m hold" });
+  });
+
+  it("defaults label to a truncated wallet when omitted", () => {
+    const w = "9BkpVwAmVMEsqxtQcBbdPtUpXoAxQxEGgDn2RufLrw9P";
+    const out = parseLeaderConfig(w);
+    expect(out[0]!.label).toBe("9BkpVw…rw9P");
+    expect(out[0]!.blurb).toBe("");
+  });
+
+  it("skips entries that aren't plausible base58 pubkeys", () => {
+    expect(parseLeaderConfig("short|x|y")).toEqual([]);
+    const w = "9BkpVwAmVMEsqxtQcBbdPtUpXoAxQxEGgDn2RufLrw9P";
+    expect(parseLeaderConfig(`bad ; ${w}|ok|`)).toHaveLength(1);
   });
 });

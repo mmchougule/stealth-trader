@@ -73,11 +73,12 @@ describe("holdings panel", () => {
 });
 
 describe("discover panel", () => {
-  it("lists the curated leaders", async () => {
+  it("shows the empty-config message when no leaders are configured", async () => {
+    // OSS default: STEALTH_DISCOVER_LEADERS unset → RECOMMENDED_LEADERS is
+    // empty (parsed at module load). Panel points users at /leader instead.
     const ctx = makeCtx();
     await showDiscover(baseDeps, ctx);
-    expect(ctx.replies[0]).toMatch(/Top vetted leaders/);
-    expect(ctx.replies[0]).toMatch(/9BkpVw…rw9P/);
+    expect(ctx.replies[0]).toMatch(/no recommended leaders configured/i);
   });
 });
 
