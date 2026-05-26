@@ -22,9 +22,12 @@ import { getPool, applySchema } from "./db/index.js";
 import { parseMasterSeed } from "./wallet.js";
 import { makeB402Backend, userPubkey, makeConnection } from "./b402-backend.js";
 import { makeBalanceStore } from "./balance.js";
-import { makeTrade } from "./trade.js";
+import { makeTrade, computeBuyFee } from "./trade.js";
 import { registerHandlers } from "./telegram/router.js";
 import { startDepositWatcher } from "./deposits.js";
+import { getTokenInfo, getTokenDecimals, getQuote, SOL_MINT } from "./jupiter.js";
+
+const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
 function loadSolanaKeypairFile(p: string): Keypair {
   const expanded = p.startsWith("~/") ? path.join(process.env.HOME ?? "", p.slice(2)) : p;
@@ -59,6 +62,67 @@ async function main(): Promise<void> {
   });
   const balance = makeBalanceStore(pool);
   const trade = makeTrade({ backend, balance });
+  const connection = makeConnection(cfg.heliusRpcUrl);
+
+  // Read the user's spendable public SOL from the ledger. The Buy panel's
+  // PUBLIC section funds a shield+swap from this balance.
+  const publicSolLamports = async (tgId: number): Promise<bigint> => {
+    const r = await pool.query<{ sol_balance_lamports: string }>(
+      `SELECT sol_balance_lamports FROM stealth.users WHERE tg_id = $1`,
+      [tgId],
+    );
+    return r.rowCount && r.rowCount > 0 ? BigInt(r.rows[0]!.sol_balance_lamports) : 0n;
+  };
+
+  // The Buy panel adapts trade.executeBuy plus a set of read-only lookups.
+  // Every lookup is wrapped at the panel layer (Promise.catch), so failures
+  // degrade to "no notes" / "no quote" rather than throwing into grammy.
+  const buyDeps = {
+    executeBuy: (args: { tgId: number; mint: string; solLamports: bigint }) => trade.executeBuy(args),
+    publicSolLamports,
+    shieldedSolNotes: async (tgId: number): Promise<bigint[]> => {
+      const notes = await backend.getNotes(tgId, WSOL_MINT);
+      return notes.map((n) => n.amount);
+    },
+    tokenMeta: async (mint: string): Promise<{ symbol: string | null; decimals: number }> => {
+      const [ti, chainDecimals] = await Promise.all([
+        getTokenInfo(mint).catch(() => null),
+        getTokenDecimals(connection, mint).catch(() => null),
+      ]);
+      return { symbol: ti?.symbol ?? null, decimals: chainDecimals ?? ti?.decimals ?? 6 };
+    },
+    quoteTokensOut: async (mint: string, solLamports: bigint): Promise<bigint | null> => {
+      const q = await getQuote(SOL_MINT, mint, solLamports, 100).catch(() => null);
+      return q ? BigInt(q.outAmount) : null;
+    },
+    computeBuyFee,
+  };
+
+  const sellDeps = {
+    // Adapt backend.privateSell → the SellDeps.executeSell shape. Wrapped in
+    // the same ok/error envelope as buy so the panel renders a clean receipt
+    // or a failure line.
+    executeSell: async (args: { tgId: number; mint: string; rawAmount: bigint }) => {
+      try {
+        const r = await backend.privateSell(args);
+        return { ok: true as const, txSignature: r.txSignature, solReceived: r.solReceived };
+      } catch (e) {
+        return { ok: false as const, error: (e as Error).message };
+      }
+    },
+    holdings: (tgId: number) =>
+      backend.getHoldings(tgId).then((rows) =>
+        rows.map((h) => ({ mint: h.mint, amount: h.amount, decimals: h.decimals, symbol: null })),
+      ),
+    tokenNotes: async (tgId: number, mint: string): Promise<bigint[]> => {
+      const notes = await backend.getNotes(tgId, mint);
+      return notes.map((n) => n.amount);
+    },
+    quoteSolOut: async (mint: string, rawAmount: bigint): Promise<bigint | null> => {
+      const q = await getQuote(mint, SOL_MINT, rawAmount, 100).catch(() => null);
+      return q ? BigInt(q.outAmount) : null;
+    },
+  };
 
   const bot = new Bot(cfg.telegramBotToken);
   registerHandlers(bot, {
@@ -67,23 +131,10 @@ async function main(): Promise<void> {
     resolvePubkey: (tgId) => userPubkey(tgId, masterSeed),
     wallet: backend,
     ...(process.env.HELIUS_API_KEY ? { heliusApiKey: process.env.HELIUS_API_KEY } : {}),
-    buy: trade,
-    sell: {
-      // Adapt backend.privateSell → the SellDeps.executeSell shape.
-      // Wrapped in the same ok/error envelope as buy so the panel renders
-      // a clean receipt or a refundless failure line.
-      executeSell: async (args) => {
-        try {
-          const r = await backend.privateSell(args);
-          return { ok: true as const, txSignature: r.txSignature, solReceived: r.solReceived };
-        } catch (e) {
-          return { ok: false as const, error: (e as Error).message };
-        }
-      },
-    },
+    buy: buyDeps,
+    sell: sellDeps,
   });
 
-  const connection = makeConnection(cfg.heliusRpcUrl);
   startDepositWatcher({
     pool,
     connection,
