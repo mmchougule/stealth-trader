@@ -19,7 +19,12 @@ class PgliteClient implements DbClient {
   constructor(private db: PGlite) {}
   async query<R = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<QueryResult<R>> {
     const r = await this.db.query<R>(sql, params ?? []);
-    return { rows: r.rows ?? [], rowCount: r.affectedRows ?? r.rows?.length ?? 0 };
+    const rows = r.rows ?? [];
+    // pglite sets affectedRows for INSERT/UPDATE/DELETE but leaves it 0 for
+    // SELECT (where pg would report the row count). `??` won't fall through
+    // on 0, so use max(rows, affected): SELECT → rows.length, write → affected.
+    const rowCount = Math.max(rows.length, r.affectedRows ?? 0);
+    return { rows, rowCount };
   }
   release(): void { /* nothing to release — single in-process connection */ }
 }
@@ -28,7 +33,12 @@ class PglitePool implements DbPool {
   constructor(private db: PGlite) {}
   async query<R = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<QueryResult<R>> {
     const r = await this.db.query<R>(sql, params ?? []);
-    return { rows: r.rows ?? [], rowCount: r.affectedRows ?? r.rows?.length ?? 0 };
+    const rows = r.rows ?? [];
+    // pglite sets affectedRows for INSERT/UPDATE/DELETE but leaves it 0 for
+    // SELECT (where pg would report the row count). `??` won't fall through
+    // on 0, so use max(rows, affected): SELECT → rows.length, write → affected.
+    const rowCount = Math.max(rows.length, r.affectedRows ?? 0);
+    return { rows, rowCount };
   }
   async connect(): Promise<DbClient> {
     return new PgliteClient(this.db);

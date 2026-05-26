@@ -65,4 +65,20 @@ describe("db helpers", () => {
     const r = await q<{ v: number }>("SELECT v FROM t2.kv WHERE k = $1", ["x"]);
     expect(r.rows[0]?.v).toBe(42);
   });
+
+  it("SELECT reports rowCount = rows.length (pglite affectedRows=0 regression)", async () => {
+    // pglite returns affectedRows=0 for SELECT; the adapter must fall back
+    // to rows.length or callers that guard `if (rowCount === 0) return`
+    // (deposit watcher) and `rowCount > 0 ? ... : 0` (/balance) silently
+    // see zero rows. This bug shipped once and broke deposits + balance.
+    const { q } = await import("./index.js");
+    await q("CREATE SCHEMA IF NOT EXISTS t3");
+    await q("CREATE TABLE IF NOT EXISTS t3.kv (k TEXT PRIMARY KEY, v INTEGER NOT NULL)");
+    await q("INSERT INTO t3.kv (k, v) VALUES ('a', 1), ('b', 2), ('c', 3)");
+    const sel = await q<{ v: number }>("SELECT v FROM t3.kv");
+    expect(sel.rows.length).toBe(3);
+    expect(sel.rowCount).toBe(3); // must NOT be 0
+    const empty = await q("SELECT v FROM t3.kv WHERE k = 'nope'");
+    expect(empty.rowCount).toBe(0);
+  });
 });
