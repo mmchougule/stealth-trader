@@ -7,9 +7,19 @@
  * so we verify the panel → preview → execute → receipt path without grammy.
  */
 import { describe, it, expect, vi } from "vitest";
+
+// Controllable rugcheck mock — defaults to pass:true so the rest of the
+// suite is unaffected; the danger test overrides per-call. Resolves to the
+// same module buy.ts imports ("../../safety.js") — vitest dedupes by path.
+const safetyMock = vi.hoisted(() => ({
+  checkToken: vi.fn(async () => ({ pass: true, reason: "ok" })),
+}));
+vi.mock("../safety.js", () => safetyMock);
+
 import {
   renderBuyPanel,
   renderBuyPreview,
+  runBuy,
   onBuyNote,
   onBuyAmount,
   onBuyConfirm,
@@ -19,7 +29,12 @@ import {
   type BuyDeps,
 } from "./panels/buy.js";
 import { makeFlowState, type BuyFlow } from "./state.js";
-import type { CallbackCtx, Keyboard } from "./types.js";
+import type { CallbackCtx, CommandCtx, Deps, Keyboard } from "./types.js";
+
+function makeCmdCtx(text: string): CommandCtx & { replies: string[] } {
+  const replies: string[] = [];
+  return { tgId: 7, text, replies, async reply(m) { replies.push(m); } };
+}
 
 const MINT = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
 const SOL = 1_000_000_000n;
@@ -202,6 +217,41 @@ describe("buy callbacks", () => {
     const ctx = makeCbCtx("buy:confirm");
     await onBuyConfirm(makeBuyDeps(), state, ctx);
     expect(ctx.answers[0]).toMatch(/expired/);
+  });
+
+  it("CLI buy aborts on a rugcheck danger verdict (no SOL moves)", async () => {
+    safetyMock.checkToken.mockResolvedValueOnce({
+      pass: false, reason: "RugCheck danger flags: honeypot",
+    });
+    const exec = vi.fn(async () => ({
+      ok: true as const, txSignature: "TX", tokensReceived: 0n, effectiveLamports: 0n,
+    }));
+    const ctx = makeCmdCtx(`/buy ${MINT} 0.01`);
+    await runBuy({} as Deps, makeBuyDeps({ executeBuy: exec }), makeFlowState(), ctx);
+    expect(exec).not.toHaveBeenCalled();
+    expect(ctx.replies[0]).toMatch(/blocked: RugCheck danger/);
+  });
+
+  it("double-tapped buy:confirm executes exactly once", async () => {
+    // Telegram resends callbacks; pendingBuy is deleted BEFORE the await,
+    // so a second tap finds no pending and short-circuits to "expired".
+    const state = makeFlowState();
+    state.pendingBuy.set(7, { mint: MINT, symbol: "BAGS", solLamports: SOL, decimals: 6 });
+    let inflight = false;
+    const exec = vi.fn(async () => {
+      // Assert the two calls never overlap (pending cleared before await).
+      expect(inflight).toBe(false);
+      inflight = true;
+      await new Promise((r) => setTimeout(r, 5));
+      inflight = false;
+      return { ok: true as const, txSignature: "TX1", tokensReceived: 1n, effectiveLamports: SOL };
+    });
+    const deps = makeBuyDeps({ executeBuy: exec });
+    await Promise.all([
+      onBuyConfirm(deps, state, makeCbCtx("buy:confirm")),
+      onBuyConfirm(deps, state, makeCbCtx("buy:confirm")),
+    ]);
+    expect(exec).toHaveBeenCalledTimes(1);
   });
 
   it("buy:cancel clears state and edits the message", async () => {
