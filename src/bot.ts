@@ -26,7 +26,7 @@ import { makeTrade, computeBuyFee } from "./trade.js";
 import { registerHandlers } from "./telegram/router.js";
 import { startDepositWatcher } from "./deposits.js";
 import { getTokenInfo, getTokenDecimals, getQuote, SOL_MINT } from "./jupiter.js";
-import { listHoldings } from "./holdings.js";
+import { listHoldings, getHolding, recordSell } from "./holdings.js";
 
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
@@ -62,8 +62,21 @@ async function main(): Promise<void> {
     ...(operatorFeeKeypair ? { operatorFeeKeypair } : {}),
   });
   const balance = makeBalanceStore(pool);
-  const trade = makeTrade({ backend, balance });
   const connection = makeConnection(cfg.heliusRpcUrl);
+
+  // Resolve a token's symbol + decimals for the cost-basis ledger. The ledger
+  // is the authoritative source the sell picker + /holdings read from (NOT the
+  // SDK note labels), so a long-tail memecoin stays sellable even when the SDK
+  // would render its shielded note as "unknown:<frhex>" on a cold instance.
+  const tokenMeta = async (mint: string): Promise<{ symbol: string | null; decimals: number }> => {
+    const [ti, chainDecimals] = await Promise.all([
+      getTokenInfo(mint).catch(() => null),
+      getTokenDecimals(connection, mint).catch(() => null),
+    ]);
+    return { symbol: ti?.symbol ?? null, decimals: chainDecimals ?? ti?.decimals ?? 6 };
+  };
+
+  const trade = makeTrade({ backend, balance, tokenMeta });
 
   // Read the user's spendable public SOL from the ledger. The Buy panel's
   // PUBLIC section funds a shield+swap from this balance.
@@ -85,13 +98,7 @@ async function main(): Promise<void> {
       const notes = await backend.getNotes(tgId, WSOL_MINT);
       return notes.map((n) => n.amount);
     },
-    tokenMeta: async (mint: string): Promise<{ symbol: string | null; decimals: number }> => {
-      const [ti, chainDecimals] = await Promise.all([
-        getTokenInfo(mint).catch(() => null),
-        getTokenDecimals(connection, mint).catch(() => null),
-      ]);
-      return { symbol: ti?.symbol ?? null, decimals: chainDecimals ?? ti?.decimals ?? 6 };
-    },
+    tokenMeta,
     quoteTokensOut: async (mint: string, solLamports: bigint): Promise<bigint | null> => {
       const q = await getQuote(SOL_MINT, mint, solLamports, 100).catch(() => null);
       return q ? BigInt(q.outAmount) : null;
@@ -106,6 +113,36 @@ async function main(): Promise<void> {
     executeSell: async (args: { tgId: number; mint: string; rawAmount: bigint }) => {
       try {
         const r = await backend.privateSell(args);
+        // On-chain sell landed. Debit the cost-basis ledger + append a trade
+        // row so /holdings + the sell picker reflect the reduced position.
+        // The picker offers only real note denominations, so rawAmount always
+        // equals a spendable note — no note-snap reconciliation needed.
+        // SWAP_FEE is taken on the output by the SDK adapter; we record the
+        // net SOL the user actually received.
+        try {
+          const h = await getHolding(args.tgId, args.mint);
+          await recordSell({
+            tgId: args.tgId,
+            mint: args.mint,
+            symbol: h?.symbol ?? null,
+            decimals: h?.decimals ?? 0,
+            tokensSold: args.rawAmount,
+            solReceived: r.solReceived,
+            feeLamports: 0n,
+            txSignature: r.txSignature,
+          });
+        } catch (ledgerErr) {
+          // The sell is irreversibly on chain; surface a reconcile-able error
+          // rather than pretending it failed (which would imply funds are safe).
+          log.error(
+            { tgId: args.tgId, mint: args.mint, sig: r.txSignature, err: (ledgerErr as Error).message },
+            "sell: recordSell failed AFTER on-chain success — manual reconcile needed",
+          );
+          return {
+            ok: false as const,
+            error: `Sold on chain but ledger write failed — contact operator with tx ${r.txSignature}`,
+          };
+        }
         return { ok: true as const, txSignature: r.txSignature, solReceived: r.solReceived };
       } catch (e) {
         // Log the real backend error here — the panel only shows the user a
@@ -119,10 +156,21 @@ async function main(): Promise<void> {
         return { ok: false as const, error: (e as Error).message };
       }
     },
-    holdings: (tgId: number) =>
-      backend.getHoldings(tgId).then((rows) =>
-        rows.map((h) => ({ mint: h.mint, amount: h.amount, decimals: h.decimals, symbol: null })),
-      ),
+    // Source the sell-token picker from the cost-basis LEDGER, not the SDK
+    // shielded view. The ledger always stores the real base58 mint + symbol +
+    // decimals; the SDK view can emit "unknown:<frhex>" for a memecoin note on
+    // a cold instance, which (a) is non-base58 → crashes new PublicKey() in the
+    // sell path, and (b) gets filtered out → the position vanishes from Sell.
+    // Reading the ledger here is exactly what b402-trader does (getHolding).
+    holdings: async (tgId: number) => {
+      const rows = await listHoldings(tgId);
+      return rows.map((h) => ({
+        mint: h.mint,
+        amount: h.amount,
+        decimals: h.decimals,
+        symbol: h.symbol,
+      }));
+    },
     tokenNotes: async (tgId: number, mint: string): Promise<bigint[]> => {
       const notes = await backend.getNotes(tgId, mint);
       return notes.map((n) => n.amount);
