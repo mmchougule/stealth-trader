@@ -107,6 +107,67 @@ describe("executeBuy — rejection paths", () => {
   });
 });
 
+describe("executeBuy — cost-basis ledger wiring", () => {
+  beforeEach(() => _resetUserLocks());
+
+  it("records the buy to the ledger with resolved symbol + decimals after on-chain success", async () => {
+    const balance = new MemBalance(); balance.set(1, 100_000_000n);
+    const backend = new GoodBackend();
+    const recorded: any[] = [];
+    const t = makeTrade({
+      backend,
+      balance,
+      tokenMeta: async (mint) => ({ symbol: mint === "BONKmint" ? "BONK" : null, decimals: 5 }),
+      recordBuy: async (a) => { recorded.push(a); },
+    });
+
+    const r = await t.executeBuy({ tgId: 1, mint: "BONKmint", solLamports: 5_000_000n });
+    expect(r.ok).toBe(true);
+    expect(recorded).toHaveLength(1);
+    // The ledger row carries the REAL base58 mint + symbol + decimals — this is
+    // what keeps the position sellable even when the SDK note labels it
+    // "unknown:<frhex>" on a cold instance.
+    expect(recorded[0]).toMatchObject({
+      tgId: 1,
+      mint: "BONKmint",
+      symbol: "BONK",
+      decimals: 5,
+      solLamports: 5_000_000n,
+      tokensReceived: 500_000_000n, // GoodBackend returns solLamports * 100
+    });
+    expect(recorded[0].feeLamports).toBe(302_500n); // 5bps + 0.0003 SOL flat
+  });
+
+  it("does NOT refund and surfaces a reconcile error when the ledger write fails after on-chain success", async () => {
+    const balance = new MemBalance(); balance.set(1, 100_000_000n);
+    const backend = new GoodBackend();
+    const t = makeTrade({
+      backend,
+      balance,
+      recordBuy: async () => { throw new Error("db down"); },
+    });
+
+    const r = await t.executeBuy({ tgId: 1, mint: "x", solLamports: 5_000_000n });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/landed but ledger write failed/);
+    // The swap is on chain — balance must stay DEBITED (no refund), and there
+    // must be NO buy_refund entry. Refunding here would double-credit the user.
+    expect(balance.bal.get(1)).toBe(100_000_000n - 5_302_500n);
+    expect(balance.log.find((e) => e.reason === "buy_refund")).toBeUndefined();
+  });
+
+  it("still succeeds with null symbol / 0 decimals when no tokenMeta is wired", async () => {
+    const balance = new MemBalance(); balance.set(1, 100_000_000n);
+    const backend = new GoodBackend();
+    const recorded: any[] = [];
+    const t = makeTrade({ backend, balance, recordBuy: async (a) => { recorded.push(a); } });
+
+    const r = await t.executeBuy({ tgId: 1, mint: "x", solLamports: 5_000_000n });
+    expect(r.ok).toBe(true);
+    expect(recorded[0]).toMatchObject({ symbol: null, decimals: 0 });
+  });
+});
+
 describe("executeBuy — custom fee policy", () => {
   beforeEach(() => _resetUserLocks());
 

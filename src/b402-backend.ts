@@ -23,6 +23,44 @@ import { swapWithLadder } from "./b402/dex-ladder.js";
 import { wrapSolForShield } from "./b402/ensure-wsol.js";
 import { ensureRecipientAta } from "./b402/recipient-ata.js";
 
+const WSOL_MINT_B58 = NATIVE_MINT.toBase58();
+
+// Whitelisted mints — seed the SDK's Fr-reducer registry at construction so
+// that post-restart (cold instance) holdings()/getNotes() resolve memecoin
+// notes to their base58 mint instead of the opaque "unknown:<frhex>" label.
+//
+// Why this is load-bearing: the SDK stores notes keyed by the Fr-reduced
+// tokenMint (a field element), and only `learnMint(pubkey)` teaches it the
+// reverse mapping back to base58. `swap()` learns its in/out mints in-process,
+// but a fresh SDK instance (bot restart, second replica, or notes restored
+// from Postgres persistence) has NEVER called swap() — so without this seed,
+// a shielded BONK note from a prior session resolves to "unknown:<hex>",
+// which is non-base58 and makes `new PublicKey(mint)` throw "Non-base58
+// character" in the sell/holdings path. Mirrors b402-trader's HOT_MINTS seed.
+export const HOT_MINTS: string[] = [
+  NATIVE_MINT.toBase58(),                          // wSOL
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
+  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",  // USDT
+  "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",  // BONK
+  "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",  // WIF
+  "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr",  // POPCAT
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",   // JUP
+];
+
+/** True only for a real base58 SPL mint that's a tradeable TOKEN position.
+ *  Rejects:
+ *    - wSOL — that's private SOL (the base currency), not a sellable token;
+ *             it must not show up in the Sell list as "Sell wSOL".
+ *    - opaque "unknown:<hex>" labels the SDK emits for mints it hasn't
+ *             learned — these aren't base58 and can't be quoted/swapped, and
+ *             feeding one to `new PublicKey()` throws "Non-base58 character".
+ *    - any string that isn't a valid base58 ed25519 pubkey. */
+function isTradeableTokenMint(mint: string): boolean {
+  if (mint === WSOL_MINT_B58) return false;
+  if (mint.includes(":")) return false; // "unknown:..." and other labels
+  try { new PublicKey(mint); return true; } catch { return false; }
+}
+
 export interface BackendDeps {
   masterSeed: Uint8Array;
   rpcUrl: string;
@@ -81,6 +119,9 @@ interface SdkLike {
     Promise<{ signature?: string; sig?: string }>;
   lend(opts: { mint: PublicKey; amount: bigint; market?: PublicKey }):
     Promise<{ signature?: string; sig?: string }>;
+  /** Teach the SDK a mint pubkey so holdings()/getNotes() resolve its
+   *  Fr-reduced tokenMint back to base58 instead of "unknown:<hex>". */
+  learnMint(mint: PublicKey): void;
   wallet?: { viewingPub: Uint8Array };
 }
 
@@ -130,14 +171,30 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
       // Re-construct the SDK now that we have the persistence adapter.
       // SDKs vary on whether persistence can be applied post-init; we
       // pass it in the constructor for safety.
+      //
+      // photonRpc: route the SDK's holdings/balance scans + validity proofs
+      // through our configured (Helius/Triton) RPC. Without it the SDK falls
+      // back to the public mainnet RPC for Photon reads, which 429s on the
+      // first holdings({ refresh: true }). Mirrors b402-trader's photonRpc wiring.
+      const { createRpc } = await import("@lightprotocol/stateless.js");
+      const photonRpc = createRpc(deps.rpcUrl, deps.rpcUrl);
       const sdkWithPersist = new B402Solana({
         cluster: deps.cluster,
         keypair,
         rpcUrl: deps.rpcUrl,
+        photonRpc,
         notesPersistence: { load: persistence.load, save: persistence.save },
         ...(deps.relayerUrl ? { relayerUrl: deps.relayerUrl } : {}),
       } as never) as unknown as SdkLike;
       await sdkWithPersist.ready();
+      // Seed the mint registry so cold-instance holdings()/getNotes() resolve
+      // memecoin notes to base58 instead of "unknown:<frhex>" (the label that
+      // crashes the sell path via "Non-base58 character"). swap() learns its
+      // mints in-process, but a restored-from-Postgres note store never went
+      // through swap() in THIS process — so we seed eagerly here.
+      for (const m of HOT_MINTS) {
+        try { sdkWithPersist.learnMint(new PublicKey(m)); } catch { /* ignore */ }
+      }
       return sdkWithPersist;
     })();
     cache.set(tgId, p);
@@ -183,6 +240,12 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
       // prior buy. `rawAmount` must equal one existing token note's value
       // (the adapt circuit consumes exactly one note); callers get valid
       // sizes from getNotes(tgId, mint).
+      // Guard: a malformed/opaque mint (e.g. the SDK's "unknown:<hex>" label)
+      // would throw the cryptic "Non-base58 character" deep in PublicKey.
+      // Fail fast with a clear, user-readable reason instead.
+      if (!isTradeableTokenMint(args.mint)) {
+        throw new Error(`can't sell this position — its mint isn't a tradeable token (${args.mint})`);
+      }
       const sdk = await getSdk(args.tgId);
       const res = await swapWithLadder(sdk, {
         inMint: new PublicKey(args.mint),
@@ -209,11 +272,16 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
         if (e.decimals !== undefined) cur.decimals = e.decimals;
         byMint.set(mint, cur);
       }
-      return [...byMint.entries()].map(([mint, v]) => ({
-        mint,
-        amount: v.amount.toString(),
-        decimals: v.decimals,
-      }));
+      return [...byMint.entries()]
+        // Only real, tradeable token mints. Drops wSOL (private SOL, shown in
+        // Wallet — not a sellable token) and "unknown:<hex>" labels the SDK
+        // emits for unlearned mints (non-base58 → would crash the sell path).
+        .filter(([mint]) => isTradeableTokenMint(mint))
+        .map(([mint, v]) => ({
+          mint,
+          amount: v.amount.toString(),
+          decimals: v.decimals,
+        }));
     },
 
     async getNotes(tgId, mint) {
