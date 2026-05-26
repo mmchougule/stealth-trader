@@ -5,6 +5,8 @@ import {
   formatAmount,
   formatHoldDuration,
   pad2,
+  formatNum,
+  rugcheckBadge,
 } from "./format.js";
 
 describe("lamportsToSolStr", () => {
@@ -59,5 +61,27 @@ describe("pad2", () => {
     expect(pad2(0)).toBe("00");
     expect(pad2(9)).toBe("09");
     expect(pad2(23)).toBe("23");
+  });
+});
+
+describe("formatNum", () => {
+  it("suffixes thousands and millions", () => {
+    expect(formatNum(2_500_000)).toBe("2.50M");
+    expect(formatNum(1_500)).toBe("1.50K");
+  });
+  it("uses 2 places for >=1 and 6 for sub-1", () => {
+    expect(formatNum(12.3456)).toBe("12.35");
+    expect(formatNum(0.001234)).toBe("0.001234");
+  });
+});
+
+describe("rugcheckBadge", () => {
+  it("says unknown when there's no score", () => {
+    expect(rugcheckBadge(undefined)).toBe("rugcheck: unknown");
+  });
+  it("maps score ranges to safe / caution / high risk", () => {
+    expect(rugcheckBadge(0)).toMatch(/safe \(0\)/);
+    expect(rugcheckBadge(5_000)).toMatch(/caution \(5000\)/);
+    expect(rugcheckBadge(20_000)).toMatch(/HIGH RISK \(20000\)/);
   });
 });

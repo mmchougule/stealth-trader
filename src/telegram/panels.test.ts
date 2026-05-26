@@ -9,13 +9,37 @@
 import { describe, it, expect, vi } from "vitest";
 import type { CommandCtx, Deps } from "./types.js";
 import { showWallet } from "./panels/wallet.js";
-import { showHoldings } from "./panels/holdings.js";
+import { showHoldings, renderHoldings } from "./panels/holdings.js";
 import { showDiscover } from "./panels/discover.js";
 import { runCashout } from "./panels/cashout.js";
-import { runBuy } from "./panels/buy.js";
-import { runSell } from "./panels/sell.js";
+import { runBuy, type BuyDeps } from "./panels/buy.js";
+import { runSell, type SellDeps } from "./panels/sell.js";
 import { renderLeaderStats } from "./panels/leader.js";
+import { makeFlowState } from "./state.js";
 import type { LeaderStats } from "../leader-stats.js";
+
+// A BuyDeps whose lookups all no-op; individual tests override what they
+// care about. executeBuy defaults to a success so the receipt path is hit.
+function makeBuyDeps(over: Partial<BuyDeps> = {}): BuyDeps {
+  return {
+    executeBuy: async () => ({ ok: true as const, txSignature: "", tokensReceived: 0n, effectiveLamports: 0n }),
+    publicSolLamports: async () => 0n,
+    shieldedSolNotes: async () => [],
+    tokenMeta: async () => ({ symbol: null, decimals: 6 }),
+    quoteTokensOut: async () => null,
+    computeBuyFee: () => 300_000n,
+    ...over,
+  };
+}
+
+function makeSellDeps(over: Partial<SellDeps> = {}): SellDeps {
+  return {
+    holdings: async () => [],
+    tokenNotes: async () => [],
+    quoteSolOut: async () => null,
+    ...over,
+  };
+}
 
 function makeCtx(text = ""): CommandCtx & { replies: string[] } {
   const replies: string[] = [];
@@ -57,6 +81,15 @@ describe("holdings panel", () => {
     }};
     await showHoldings(deps, ctx);
     expect(ctx.replies[0]).toBe("no shielded holdings.");
+  });
+
+  it("renders a per-token Sell button keyed by mint", () => {
+    const v = renderHoldings([
+      { mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", amount: "1500000", decimals: 6, symbol: "BAGS" },
+    ]);
+    const btn = v.keyboard.flat()[0]!;
+    expect(btn.text).toBe("Sell BAGS");
+    expect(btn.callbackData).toBe("sell:mint:DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263");
   });
 
   it("renders one row per mint with short addresses + decimals", async () => {
@@ -109,16 +142,16 @@ describe("cashout panel", () => {
   });
 });
 
-describe("buy panel", () => {
-  it("rejects bad usage", async () => {
+describe("buy panel — CLI fast-path", () => {
+  it("rejects an unparseable mint", async () => {
     const ctx = makeCtx(`/buy onlyone`);
-    await runBuy(baseDeps, { executeBuy: async () => ({ ok: true, txSignature: "", tokensReceived: 0n, effectiveLamports: 0n }) }, ctx);
-    expect(ctx.replies[0]).toMatch(/usage:/);
+    await runBuy(baseDeps, makeBuyDeps(), makeFlowState(), ctx);
+    expect(ctx.replies[0]).toMatch(/could not extract a mint/);
   });
 
   it("rejects amount below MIN_TRADE_LAMPORTS", async () => {
     const ctx = makeCtx(`/buy DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263 0.0000001`);
-    await runBuy(baseDeps, { executeBuy: async () => ({ ok: true, txSignature: "", tokensReceived: 0n, effectiveLamports: 0n }) }, ctx);
+    await runBuy(baseDeps, makeBuyDeps(), makeFlowState(), ctx);
     expect(ctx.replies[0]).toMatch(/minimum trade size/);
   });
 
@@ -128,17 +161,28 @@ describe("buy panel", () => {
       ok: true as const, txSignature: "abc",
       tokensReceived: 123_456n, effectiveLamports: 10_000_000n,
     }));
-    await runBuy(baseDeps, { executeBuy: exec }, ctx);
+    await runBuy(baseDeps, makeBuyDeps({ executeBuy: exec }), makeFlowState(), ctx);
     expect(ctx.replies[0]).toMatch(/sig: abc/);
     expect(ctx.replies[0]).toMatch(/spent 0\.0100 SOL/);
   });
 });
 
-describe("sell panel", () => {
-  it("returns the v0.6 hint when backend hasn't wired executeSell", async () => {
-    const ctx = makeCtx(`/sell DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263 1000`);
-    await runSell(baseDeps, {}, ctx);
-    expect(ctx.replies[0]).toMatch(/v0\.6/);
+describe("sell panel — CLI fast-path", () => {
+  const mint = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
+
+  it("tells the user when executeSell isn't wired", async () => {
+    const ctx = makeCtx(`/sell ${mint} 1000`);
+    await runSell(baseDeps, makeSellDeps(), makeFlowState(), ctx);
+    expect(ctx.replies[0]).toMatch(/sell backend not wired/);
+  });
+
+  it("executes a one-shot sell and renders the receipt", async () => {
+    const ctx = makeCtx(`/sell ${mint} 1000`);
+    const exec = vi.fn(async () => ({ ok: true as const, txSignature: "zzz", solReceived: 2_500_000n }));
+    await runSell(baseDeps, makeSellDeps({ executeSell: exec }), makeFlowState(), ctx);
+    expect(exec).toHaveBeenCalledWith({ tgId: 42, mint, rawAmount: 1000n });
+    expect(ctx.replies[0]).toMatch(/sig: zzz/);
+    expect(ctx.replies[0]).toMatch(/0\.002500 SOL/);
   });
 });
 
