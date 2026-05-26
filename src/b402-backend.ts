@@ -12,20 +12,16 @@
  * keyed by viewing-pub-hex so multiple bot replicas at the same
  * MASTER_SEED converge on the same store.
  */
-import {
-  Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction,
-} from "@solana/web3.js";
-import {
-  NATIVE_MINT,
-  createAssociatedTokenAccountIdempotentInstruction,
-  createSyncNativeInstruction,
-  getAssociatedTokenAddressSync,
-} from "@solana/spl-token";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { NATIVE_MINT } from "@solana/spl-token";
 import { B402Solana } from "@b402ai/solana";
 import type { DbPool } from "./db/index.js";
 import { deriveUserKeypair } from "./wallet.js";
 import { makeNotePersistence } from "./notePersistence.js";
 import type { SwapBackend } from "./trade.js";
+import { swapWithLadder } from "./b402/dex-ladder.js";
+import { wrapSolForShield } from "./b402/ensure-wsol.js";
+import { ensureRecipientAta } from "./b402/recipient-ata.js";
 
 export interface BackendDeps {
   masterSeed: Uint8Array;
@@ -49,6 +45,10 @@ export interface Holding {
 }
 
 export interface WalletBackend extends SwapBackend {
+  /** Sell a shielded token note back to SOL: swap(token → wSOL). Mirror
+   *  of privateBuy. `rawAmount` must equal one existing token note's
+   *  value (getNotes(tgId, mint) lists them). Returns lamports received. */
+  privateSell(args: { tgId: number; mint: string; rawAmount: bigint }): Promise<{ txSignature: string; solReceived: bigint }>;
   /** Return shielded balances for the user, one row per mint. */
   getHoldings(tgId: number): Promise<Holding[]>;
   /** Unshield to a recipient. mint defaults to wSOL (so the recipient
@@ -98,140 +98,6 @@ async function buildPhase9Deps(rpcUrl: string, cluster: "mainnet" | "devnet" | "
   if (!altStr) throw new Error(`no b402 ALT for cluster=${cluster}`);
   const photonRpc = createRpc(rpcUrl, rpcUrl);
   return { photonRpc, alt: new PublicKey(altStr) };
-}
-
-/**
- * Wrap `lamports` native SOL into the user's wSOL ATA. Idempotent:
- * the ATA-create instruction is the *Idempotent variant, the transfer
- * is value-typed, and syncNative reconciles the wSOL balance to the
- * underlying lamports.
- *
- * Required before sdk.shield(NATIVE_MINT, …). The b402 pool's Shield
- * instruction expects depositor_token_account to be an initialized
- * wSOL ATA — sdk.shield does NOT create it for you.
- */
-async function wrapSolForShield(
-  connection: Connection,
-  userKp: Keypair,
-  lamports: bigint,
-): Promise<string> {
-  const ata = getAssociatedTokenAddressSync(NATIVE_MINT, userKp.publicKey);
-  const tx = new Transaction().add(
-    createAssociatedTokenAccountIdempotentInstruction(
-      userKp.publicKey,
-      ata,
-      userKp.publicKey,
-      NATIVE_MINT,
-    ),
-    SystemProgram.transfer({
-      fromPubkey: userKp.publicKey,
-      toPubkey: ata,
-      lamports: Number(lamports),
-    }),
-    createSyncNativeInstruction(ata),
-  );
-  return sendAndConfirmTransaction(connection, tx, [userKp], {
-    commitment: "confirmed",
-    maxRetries: 3,
-  });
-}
-
-/**
- * Robust swap with maxAccounts laddering. The b402 relayer's tx-build
- * buffer rejects oversized Jupiter routes with "encoding overruns
- * Uint8Array" / "tx_too_large" / "serialised tx" — depends on how many
- * accounts the Jupiter route + nullifier sibling-ix wrapping needs.
- * Ladder shrinks maxAccounts until it fits the 1232 B v0 cap.
- *
- * Also retries route-staleness transients (0x9 SlippageToleranceExceeded,
- * 0x1789 RouteStale, 502 rpc_failure) once at the current maxAcc.
- *
- * Ported from b402-trader/src/b402-client.ts::executePrivateSwap. Kept
- * minimal — DEX laddering, stale-note refresh, and Merkle-root retry
- * live in b402-trader because copy-trade hits arbitrary memecoin pairs
- * across many sequential swaps; the stealth-trader smoke does one
- * SOL→USDC swap and doesn't need them.
- */
-async function swapWithLadder(
-  sdk: SdkLike,
-  args: { inMint: PublicKey; outMint: PublicKey; amount: bigint; slippageBps?: number },
-): Promise<{ signature?: string; sig?: string; outAmount?: bigint | string }> {
-  const ceiling = Number(process.env.JUP_MAX_ACCOUNTS ?? 32);
-  const ladder = Array.from(new Set([ceiling, 28, 24, 20])).filter((v) => v >= 16);
-  let lastErr: unknown = null;
-  for (let i = 0; i < ladder.length; i++) {
-    const maxAccounts = ladder[i]!;
-    const isLast = i === ladder.length - 1;
-    try {
-      return await sdk.swap({
-        inMint: args.inMint,
-        outMint: args.outMint,
-        amount: args.amount,
-        slippageBps: args.slippageBps ?? 50,
-        maxAccounts,
-      });
-    } catch (e) {
-      lastErr = e;
-      const msg = (e as Error).message ?? "";
-      const txTooLarge = msg.includes("encoding overruns Uint8Array")
-        || msg.includes("tx_too_large")
-        || msg.includes("serialised tx");
-      if (txTooLarge && !isLast) continue; // ladder down
-
-      const routeStale = msg.includes("0x9")
-        || msg.includes("0x1789")
-        || (msg.includes("502") && msg.includes("rpc_failure"));
-      if (routeStale) {
-        // Single in-place retry at same maxAccounts (route refreshes in <1s).
-        try {
-          return await sdk.swap({
-            inMint: args.inMint,
-            outMint: args.outMint,
-            amount: args.amount,
-            slippageBps: args.slippageBps ?? 50,
-            maxAccounts,
-          });
-        } catch (e2) {
-          lastErr = e2;
-          // Fall through — if retry also failed for a non-ladder reason, surface.
-        }
-      }
-      throw e;
-    }
-  }
-  throw lastErr ?? new Error("swap failed at all maxAccounts");
-}
-
-/**
- * Pre-create the recipient's ATA for `mint` paid by the operator. Idempotent.
- * Without this, sdk.unshield falls back to using the user's derived keypair
- * (which is intentionally near-empty after shielding) to pay ~0.002 SOL rent,
- * and the tx fails with "account (0) insufficient funds for rent".
- *
- * Returns the ATA address either way.
- */
-async function ensureRecipientAta(
-  connection: Connection,
-  operator: Keypair,
-  recipient: PublicKey,
-  mint: PublicKey,
-): Promise<PublicKey> {
-  const ata = getAssociatedTokenAddressSync(mint, recipient);
-  const info = await connection.getAccountInfo(ata);
-  if (info) return ata;
-  const tx = new Transaction().add(
-    createAssociatedTokenAccountIdempotentInstruction(
-      operator.publicKey, // fee payer + rent payer
-      ata,
-      recipient,
-      mint,
-    ),
-  );
-  await sendAndConfirmTransaction(connection, tx, [operator], {
-    commitment: "confirmed",
-    maxRetries: 3,
-  });
-  return ata;
 }
 
 export function makeB402Backend(deps: BackendDeps): WalletBackend {
@@ -306,6 +172,25 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
       if (!txSignature) throw new Error("SDK returned no signature on swap");
       const tokensReceived = res.outAmount === undefined ? 0n : BigInt(res.outAmount);
       return { txSignature, tokensReceived };
+    },
+
+    async privateSell(args) {
+      // Sell is buy in reverse: spend an existing shielded TOKEN note,
+      // swap it to wSOL via the b402 Jupiter adapter, land a shielded
+      // wSOL note. No shield step — the input note already exists from a
+      // prior buy. `rawAmount` must equal one existing token note's value
+      // (the adapt circuit consumes exactly one note); callers get valid
+      // sizes from getNotes(tgId, mint).
+      const sdk = await getSdk(args.tgId);
+      const res = await swapWithLadder(sdk, {
+        inMint: new PublicKey(args.mint),
+        outMint: NATIVE_MINT,
+        amount: args.rawAmount,
+      });
+      const txSignature = res.signature ?? res.sig ?? "";
+      if (!txSignature) throw new Error("SDK returned no signature on sell swap");
+      const solReceived = res.outAmount === undefined ? 0n : BigInt(res.outAmount);
+      return { txSignature, solReceived };
     },
 
     async getHoldings(tgId) {
