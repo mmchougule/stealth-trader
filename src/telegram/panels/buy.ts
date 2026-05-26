@@ -99,11 +99,13 @@ export function renderBuyPanel(args: {
 }): PanelView {
   const { mint, symbol, publicSolLamports, rugScore } = args;
 
-  // Largest-first; only notes that clear the min trade size are spendable.
+  // Spendable notes clear the min trade size; the full private balance (for
+  // display) sums ALL notes so the user always sees what they hold.
   const notes = [...args.shieldedNotes]
     .filter((n) => n >= MIN_TRADE_LAMPORTS)
     .sort((a, b) => (b > a ? 1 : b < a ? -1 : 0));
-  const totalShielded = notes.reduce((a, n) => a + n, 0n);
+  const totalShieldedAll = args.shieldedNotes.reduce((a, n) => a + n, 0n);
+  const allNotesCount = args.shieldedNotes.length;
 
   const publicUsable = publicSolLamports > RESERVE_LAMPORTS
     ? publicSolLamports - RESERVE_LAMPORTS
@@ -123,15 +125,17 @@ export function renderBuyPanel(args: {
     `Solscan: https://solscan.io/token/${mint}`,
     rugcheckBadge(rugScore),
     "",
+    // ALWAYS show both balances — the two rows the user expects, like
+    // b402-trader. Buttons below are gated on the min trade size, but the
+    // balance is always visible so funds never look "missing".
+    `🔒 Private: ${lamportsToSolStr(totalShieldedAll)} SOL${allNotesCount ? `  (${allNotesCount} note${allNotesCount === 1 ? "" : "s"})` : ""}`,
+    `🌐 Public:  ${lamportsToSolStr(publicSolLamports)} SOL`,
+    "",
   ];
-  if (hasNotes) {
-    lines.push(`🔒 PRIVATE — ${lamportsToSolStr(totalShielded)} SOL across ${notes.length} note${notes.length === 1 ? "" : "s"}`);
-  }
-  if (hasPublic) {
-    lines.push(`🌐 PUBLIC — ${lamportsToSolStr(publicSolLamports)} SOL`);
-  }
-  if (!hasNotes && !hasPublic) {
-    lines.push("Not enough SOL yet — deposit at least 0.005 SOL to start buying.");
+  if (hasNotes || hasPublic) {
+    lines.push("Tap a note to spend it, or a % of your public balance:");
+  } else {
+    lines.push("Min trade is 0.001 SOL. Deposit more, or your notes are below the minimum.");
   }
 
   const keyboard: Keyboard = [];
