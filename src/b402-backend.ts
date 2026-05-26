@@ -37,6 +37,18 @@ const WSOL_MINT_B58 = NATIVE_MINT.toBase58();
 // a shielded BONK note from a prior session resolves to "unknown:<hex>",
 // which is non-base58 and makes `new PublicKey(mint)` throw "Non-base58
 // character" in the sell/holdings path. Mirrors b402-trader's HOT_MINTS seed.
+
+// Hosted b402 indexer. The SDK uses it to (a) enumerate ALL shielded notes
+// for a viewing key — including ones shielded on another device / before a
+// restore — and (b) resolve ANY token mint, not just the HOT_MINTS whitelist.
+// Without it the SDK falls back to proveMostRecentLeaf (rightmost-only) +
+// local mint registry, which is why arbitrary-mint notes rendered as
+// "unknown:<frhex>". It's a convenience oracle, not a trust root: the SDK
+// verifies the indexer's claimed Merkle root against on-chain TreeState before
+// using any proof, so a tampered indexer can only DoS. Override via env.
+const DEFAULT_INDEXER_URL = "https://b402-solana-indexer-api-62092339396.us-central1.run.app";
+const INDEXER_URL = process.env.B402_INDEXER_URL ?? DEFAULT_INDEXER_URL;
+
 export const HOT_MINTS: string[] = [
   NATIVE_MINT.toBase58(),                          // wSOL
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
@@ -183,6 +195,11 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
         keypair,
         rpcUrl: deps.rpcUrl,
         photonRpc,
+        // Indexer: lets the SDK enumerate ALL of a viewing key's shielded notes
+        // (any device, post-restore) and resolve ANY mint to base58 — not just
+        // the HOT_MINTS whitelist. This is the real fix for "unknown:<frhex>"
+        // on arbitrary tokens; HOT_MINTS + the ledger are belt-and-suspenders.
+        indexerUrl: INDEXER_URL,
         notesPersistence: { load: persistence.load, save: persistence.save },
         ...(deps.relayerUrl ? { relayerUrl: deps.relayerUrl } : {}),
       } as never) as unknown as SdkLike;
