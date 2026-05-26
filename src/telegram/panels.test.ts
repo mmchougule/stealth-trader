@@ -78,7 +78,8 @@ describe("discover panel", () => {
     // empty (parsed at module load). Panel points users at /leader instead.
     const ctx = makeCtx();
     await showDiscover(baseDeps, ctx);
-    expect(ctx.replies[0]).toMatch(/no recommended leaders configured/i);
+    expect(ctx.replies[0]).toMatch(/no curated leaders configured/i);
+    expect(ctx.replies[0]).toMatch(/\/leader/);
   });
 });
 
