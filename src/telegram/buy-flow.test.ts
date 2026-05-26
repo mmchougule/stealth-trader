@@ -85,8 +85,8 @@ describe("renderBuyPanel", () => {
       rugScore: 0,
       noteOffset: 0,
     });
-    expect(v.text).toMatch(/🔒 PRIVATE/);
-    expect(v.text).toMatch(/🌐 PUBLIC/);
+    expect(v.text).toMatch(/🔒 Private/);
+    expect(v.text).toMatch(/🌐 Public/);
     expect(v.text).toMatch(/rugcheck: safe \(0\)/);
     // Notes are largest-first.
     expect(v.notes).toEqual([76_900_000n, 50_000_000n]);
@@ -117,7 +117,7 @@ describe("renderBuyPanel", () => {
       rugScore: undefined, noteOffset: 0,
     });
     expect(v.notes).toEqual([]);
-    expect(v.text).toMatch(/Not enough SOL/);
+    expect(v.text).toMatch(/Min trade is 0.001 SOL/);
     expect(datas(v.keyboard).filter((d) => d.startsWith("buy:"))).toEqual(["buy:cancel"]);
   });
 
@@ -272,7 +272,7 @@ describe("buy callbacks", () => {
     const ctx = makeCbCtx("buy:notes:more:2");
     await onBuyNotesMore(makeBuyDeps({ shieldedSolNotes: async () => notes }), state, ctx);
     expect(state.buyFlow.get(7)!.noteOffset).toBe(2);
-    expect(ctx.edits[0]!.text).toMatch(/🔒 PRIVATE/);
+    expect(ctx.edits[0]!.text).toMatch(/🔒 Private/);
   });
 });
 

@@ -55,7 +55,7 @@ describe("executeBuy — happy path", () => {
     const balance = new MemBalance();
     balance.set(1, 100_000_000n);
     const backend = new GoodBackend();
-    const t = makeTrade({ backend, balance });
+    const t = makeTrade({ backend, balance, recordBuy: async () => {} });
 
     const r = await t.executeBuy({ tgId: 1, mint: "XYZmint", solLamports: 5_000_000n });
     expect(r.ok).toBe(true);
@@ -174,7 +174,7 @@ describe("executeBuy — custom fee policy", () => {
   it("respects an injected computeBuyFee", async () => {
     const balance = new MemBalance(); balance.set(1, 100_000_000n);
     const backend = new GoodBackend();
-    const t = makeTrade({ backend, balance, computeBuyFee: () => 0n }); // zero fee
+    const t = makeTrade({ backend, balance, computeBuyFee: () => 0n, recordBuy: async () => {} }); // zero fee
     const r = await t.executeBuy({ tgId: 1, mint: "x", solLamports: 5_000_000n });
     expect(r.ok).toBe(true);
     expect(balance.bal.get(1)).toBe(100_000_000n - 5_000_000n);
