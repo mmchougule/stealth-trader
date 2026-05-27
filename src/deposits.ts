@@ -120,7 +120,7 @@ async function handleDeposit(
   if (deps.notify) {
     const sol = Number(credit) / 1e9;
     try {
-      await deps.notify(tgId, `+${sol.toFixed(4)} SOL credited.\nReady to trade — tap /buy or /follow.`);
+      await deps.notify(tgId, `+${sol.toFixed(4)} SOL credited.\nReady to trade — tap Buy or send /buy <mint>.`);
     } catch (e) {
       log.warn({ err: (e as Error).message }, "deposit notify failed");
     }
