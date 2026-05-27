@@ -1,8 +1,8 @@
 # stealth-trader
 
-**Private trading on Solana — your trades never link back to your wallet.**
+**Give your AI agent its own Solana wallet — it trades for you, and nothing traces back to it.**
 
-An open-source Telegram bot + MCP server: trade by tapping in Telegram, or hand it to a Claude / Cursor agent. You fund a derived address — that's your public balance — then every buy, sell, and cashout runs *inside* the [b402 shielded pool](https://github.com/mmchougule/b402-solana): your SOL is shielded, swapped, and reshielded as an encrypted note behind a zero-knowledge proof, with a relayer signing the on-chain tx. The trade lands on-chain; your wallet isn't the signer or even an account on it, so nothing ties it back to your address.
+An open-source MCP server (plus a Telegram bot) that gives an AI agent its own Solana wallet. Hand it to a Claude or Cursor agent and it can buy, sell, and cash out on its own. Every trade runs *inside* the [b402 shielded pool](https://github.com/mmchougule/b402-solana): the SOL is shielded, swapped, and reshielded as an encrypted note behind a zero-knowledge proof, with a relayer signing the on-chain tx. The trade lands on-chain — but the agent's wallet isn't the signer or even an account on it, so nothing traces back to it. Prefer to tap instead of prompt? The same engine runs as a Telegram bot.
 
 [Get started](#get-started) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
 
