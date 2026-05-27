@@ -8,6 +8,8 @@ An open-source Telegram bot + MCP server: trade by tapping in Telegram, or hand 
 
 ![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED) ![ci](https://github.com/mmchougule/stealth-trader/actions/workflows/ci.yml/badge.svg) ![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue) ![node: 20+](https://img.shields.io/badge/node-20+-339933) ![tests: 206](https://img.shields.io/badge/tests-206%20passing-green)
 
+> **Note: the live mainnet deployment is a test playground, not production.** The current program IDs are an experimental preview — use small amounts only and treat it as a tech demo. An audited production deployment, under multisig upgrade authority, is in progress and will replace these program IDs.
+
 <table>
   <tr>
     <td align="center" valign="top" width="60%">
