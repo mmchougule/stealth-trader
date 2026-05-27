@@ -1,6 +1,6 @@
 {
   "name": "@b402ai/stealth-trader",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Buy, copy-trade, and cash out on Solana without your wallet showing up in the tx. MCP server + Telegram bot + TypeScript SDK.",
   "type": "module",
   "license": "Apache-2.0",

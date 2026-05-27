@@ -6,7 +6,7 @@ Built on the [b402 shielded pool](https://github.com/mmchougule/b402-solana) —
 
 [Quickstart](#try-it-in-30-seconds) · [What an agent sees](#what-an-agent-sees) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
 
-![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED) ![ci](https://github.com/mmchougule/stealth-trader/actions/workflows/ci.yml/badge.svg) ![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue) ![node: 20+](https://img.shields.io/badge/node-20+-339933) ![tests: 135](https://img.shields.io/badge/tests-135%20passing-green)
+![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED) ![ci](https://github.com/mmchougule/stealth-trader/actions/workflows/ci.yml/badge.svg) ![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue) ![node: 20+](https://img.shields.io/badge/node-20+-339933) ![tests: 194](https://img.shields.io/badge/tests-194%20passing-green)
 
 <table>
   <tr>
@@ -136,7 +136,7 @@ For production deployments, set `OPERATOR_FEE_KEYPAIR_PATH` to a keypair file wi
 /cashout <recipient> [mint]       unshield to any wallet (no link to deposit)
 ```
 
-Copy-trade (`/follow`, `/follows`, `/unfollow`) lands in v0.6 once the hosted Helius webhook proxy ships — until then end-users would need ngrok to receive leader events. The Buy / Sell / Cashout inline-keyboard wizards also land in v0.6; v0.5 ships the command-line form so the pipeline is exercisable end-to-end.
+Copy-trade (`/follow`, `/follows`, `/unfollow`) lands in v0.6 once the hosted Helius webhook proxy ships — until then end-users would need ngrok to receive leader events.
 
 ## MCP tools
 
@@ -203,8 +203,8 @@ The "wallet in accountKeys" rows are facts checkable on Solscan in 30 seconds fo
 
 ## Numbers
 
-- 135 unit tests covering swap-ladder, rug-check gate, Jupiter quote breaker, per-user serial lock, balance ledger, wallet derivation, delta-balance deposits, leader stats, MCP handlers.
-- Zero network calls in the test suite — sub-second wall time.
+- 194 unit tests covering swap-ladder, rug-check gate, Jupiter quote breaker, per-user serial lock, balance ledger, wallet derivation, delta-balance deposits, leader stats, MCP handlers.
+- Tests run against in-memory pglite + a mocked SDK; ~3s wall time. A few exercise live Jupiter/RugCheck and degrade gracefully when rate-limited, so the suite stays green offline.
 - Built on `@b402ai/solana@0.0.33`, mainnet program `42a3hsCXtQLWonyxWZosaaCJCweYYKMrvNd25p1Jrt2y`.
 
 ## Status
@@ -213,7 +213,7 @@ v0.5 — `/buy`, `/sell`, `/holdings`, `/cashout` work end-to-end against mainne
 
 ## Limits
 
-- Copy-trade is buys only. Sells (leader sells X → follower sells X) ship in v0.4.
+- Copy-trade is buys only. Sells (leader sells X → follower sells X) ship with copy-trade in v0.6.
 - Hosted b402 relayer is the default. Run your own from [`mmchougule/b402-solana/packages/relayer`](https://github.com/mmchougule/b402-solana/tree/main/packages/relayer) and point `B402_RELAYER_URL` at it.
 - The b402 shielded pool is unaudited. Read the [trust assumptions](https://docs.b402.ai/solana/concepts/trust-assumptions) before depositing more than you'd lose in an experiment.
 - Same-amount notes pile up if every copy uses identical `per_trade_lamports`. The SDK recycles existing notes when shapes match. Snap-to-nearest recycle is on the roadmap.
