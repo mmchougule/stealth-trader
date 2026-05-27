@@ -7,6 +7,9 @@
  * here — the panels themselves never see grammy.
  */
 import { describe, it, expect, vi } from "vitest";
+// Keep the suite deterministic + offline: the buy CLI path calls the RugCheck
+// safety gate, which would otherwise hit the network and flake on rate limits.
+vi.mock("../safety.js", () => ({ checkToken: async () => ({ pass: true, score: 0 }) }));
 import type { CommandCtx, Deps } from "./types.js";
 import { showWallet } from "./panels/wallet.js";
 import { showHoldings, renderHoldings } from "./panels/holdings.js";
