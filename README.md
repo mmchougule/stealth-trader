@@ -29,7 +29,7 @@ stealth-trader is an open-source Telegram bot + MCP server for private Solana tr
 claude mcp add stealth-trader -- npx -y @b402ai/stealth-trader@latest mcp
 ```
 
-First run generates a wallet and saves its seed to `~/.config/stealth-trader/master-seed` — **back that file up; it derives the wallet that holds your funds.** Set `HELIUS_RPC_URL` for a faster RPC (it defaults to public mainnet, which throttles).
+First run generates a wallet and saves its seed to `~/.config/stealth-trader/master-seed` — **back that file up; it derives the wallet that holds your funds.** It boots on public mainnet RPC so reads work out of the box, but **set `HELIUS_RPC_URL` (free, 1 min at [helius.dev](https://helius.dev)) before trading** — public RPC throttles and swaps can fail on it.
 
 Your agent can now **buy, sell, check holdings, and cash out — privately**. Ask it: *"privately buy 0.01 SOL of `<mint>`, then cash out to a fresh address."* It composes the tools and signs nothing with your own wallet — the relayer does.
 
