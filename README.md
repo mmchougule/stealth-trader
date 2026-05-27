@@ -2,11 +2,11 @@
 
 **Private trading on Solana — your trades never link back to your wallet.**
 
-An open-source Telegram bot + MCP server: trade by tapping in Telegram, or hand it to a Claude / Cursor agent. You deposit SOL once into the [b402 shielded pool](https://github.com/mmchougule/b402-solana); after that a relayer signs every buy, sell, lend, and cashout over zero-knowledge proofs. The trade lands on-chain — but the signer is the relayer, not you, so nothing ties it back to your address.
+An open-source Telegram bot + MCP server: trade by tapping in Telegram, or hand it to a Claude / Cursor agent. You fund a derived address — that's your public balance — then every buy, sell, and cashout runs *inside* the [b402 shielded pool](https://github.com/mmchougule/b402-solana): your SOL is shielded, swapped, and reshielded as an encrypted note behind a zero-knowledge proof, with a relayer signing the on-chain tx. The trade lands on-chain; your wallet isn't the signer or even an account on it, so nothing ties it back to your address.
 
 [Get started](#get-started) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
 
-![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED) ![ci](https://github.com/mmchougule/stealth-trader/actions/workflows/ci.yml/badge.svg) ![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue) ![node: 20+](https://img.shields.io/badge/node-20+-339933) ![tests: 194](https://img.shields.io/badge/tests-194%20passing-green)
+![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED) ![ci](https://github.com/mmchougule/stealth-trader/actions/workflows/ci.yml/badge.svg) ![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue) ![node: 20+](https://img.shields.io/badge/node-20+-339933) ![tests: 206](https://img.shields.io/badge/tests-206%20passing-green)
 
 <table>
   <tr>
@@ -164,20 +164,23 @@ Seven tools an agent (Claude Code, Cursor, custom) can compose. Example: *"score
 ## How it works
 
 ```
-Your wallet  ─shield once──►  shielded note (yours, hidden balance + owner)
-                                       │
-                ┌──────────────────────┼──────────────────────┐
-                ▼                      ▼                      ▼
-          private_buy            private_sell           private_lend
-          (SOL → token)          (token → SOL)          (Kamino USDC)
-                │                      │                      │
-                └──────────┬───────────┴──────────┬───────────┘
-                           ▼                      ▼
-                  b402 relayer signs        new shielded note
-                  the on-chain tx           (yours, still hidden)
+Fund your derived address  ──►  public SOL balance
+                                       │  shield at trade time
+                                       ▼
+        ┌──────────────  b402 shielded pool  ──────────────┐
+        │   encrypted notes · commitment tree + nullifier tree
+        ▼                      ▼                      ▼
+   private_buy            private_sell           private_lend
+   (SOL → token)          (token → SOL)          (Kamino USDC)
+        │                      │                      │
+        └──────────┬───────────┴──────────┬───────────┘
+                   ▼                      ▼
+          swap is CPI'd inside     output reshields as a
+          the pool; relayer        new encrypted note
+          signs the on-chain tx    (yours, still hidden)
 ```
 
-Every action after the initial shield is built as an adapt proof: input is one of your shielded notes, output is a new shielded note, signer is the b402 relayer. The on-chain tx shows the relayer paying from a pool-controlled account. Your wallet is not a signer, not an account, not in the block.
+You fund a derived address — that's your public balance. A buy shields fresh SOL into the pool, swaps it for the token via a CPI *from inside* the pool, and reshields the output as a new encrypted note; if you already hold a shielded note, it skips the shield and just swaps that note. Each spend is an adapt proof: it proves in zero-knowledge that you own a valid unspent note — tracked in the commitment tree, retired in the nullifier tree — without revealing which one or whose. The relayer signs the on-chain tx from a pool-controlled account, so your wallet is not a signer, not an account, not in the block.
 
 Deeper reading on the b402 docs site:
 - [Privacy model](https://docs.b402.ai/solana/concepts/privacy-model) — exactly what's hidden, what's revealed
@@ -212,7 +215,7 @@ The "wallet in accountKeys" rows are facts checkable on Solscan in 30 seconds fo
 
 ## Numbers
 
-- 194 unit tests covering swap-ladder, rug-check gate, Jupiter quote breaker, per-user serial lock, balance ledger, wallet derivation, delta-balance deposits, leader stats, MCP handlers.
+- 206 unit tests covering swap-ladder, rug-check gate, Jupiter quote breaker, per-user serial lock, balance ledger, wallet derivation, delta-balance deposits, leader stats, MCP handlers.
 - Tests run against in-memory pglite + a mocked SDK; ~3s wall time. A few exercise live Jupiter/RugCheck and degrade gracefully when rate-limited, so the suite stays green offline.
 - Built on `@b402ai/solana@0.0.33`, mainnet program `42a3hsCXtQLWonyxWZosaaCJCweYYKMrvNd25p1Jrt2y`.
 
