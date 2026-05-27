@@ -75,11 +75,9 @@ export interface CallbackCtx {
 
 export interface WalletBackendCtx {
   getHoldings(tgId: number): Promise<Array<{ mint: string; amount: string; decimals: number }>>;
-  /** Unshield to `recipient`. `noteId` pins the exact shielded note to spend
-   *  (the SDK consumes one note per unshield tx; omitting it falls back to the
-   *  SDK's most-recently-shielded note, which can't reach older notes without
-   *  an indexer). The Withdraw note-picker always passes a noteId. */
-  cashout(args: { tgId: number; recipient: string; mint?: string; noteId?: string }): Promise<{ txSignature: string }>;
+  /** Unshield a shielded note to `recipient`. mint defaults to wSOL. The SDK
+   *  selects the spendable note; one note per unshield tx. */
+  cashout(args: { tgId: number; recipient: string; mint?: string }): Promise<{ txSignature: string }>;
   /** Per-note view of the shielded position. The Buy panel lists spendable
    *  wSOL notes; the Sell panel lists token notes; the Withdraw picker lists
    *  wSOL notes. Each note is one tappable amount because the adapt/unshield

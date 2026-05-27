@@ -91,11 +91,11 @@ export function makeTrade(deps: TradeDeps) {
       return { ok: false, error: `amount below min trade size (${MIN_TRADE_LAMPORTS} lamports)` };
     }
     const fee = computeBuyFeeFn(args.solLamports);
-    const totalDebit = args.solLamports + fee;
 
-    const debited = await deps.balance.debit(args.tgId, totalDebit, "buy");
-    if (!debited) return { ok: false, error: "insufficient SOL balance" };
-
+    // The spend gate is on-chain, not a DB ledger: privateBuy shields native
+    // SOL (public path) or spends a shielded note (private recycle path) and
+    // fails if neither has the funds, rolling back any fresh shield. Debiting
+    // a public-SOL ledger here wrongly blocked private-note buys.
     let res: { txSignature: string; tokensReceived: bigint };
     try {
       res = await deps.backend.privateBuy({
@@ -104,16 +104,8 @@ export function makeTrade(deps: TradeDeps) {
         solLamports: args.solLamports,
       });
     } catch (e) {
-      // Refund EVERYTHING — swap input AND fee — atomically. Without
-      // this, a swap failure silently consumes user balance.
-      await deps.balance.credit(args.tgId, totalDebit, "buy_refund").catch(() => {});
       const msg = e instanceof Error ? e.message : String(e);
-      // Log the real swap error + stack — the panel only shows the user a
-      // one-line "buy failed"; without this the cause is invisible.
-      log.error(
-        { tgId: args.tgId, mint: args.mint, solLamports: args.solLamports.toString(), err: msg, stack: e instanceof Error ? e.stack : undefined },
-        "privateBuy failed (refunded)",
-      );
+      log.error({ tgId: args.tgId, mint: args.mint, err: msg }, "buy failed");
       return { ok: false, error: msg };
     }
 

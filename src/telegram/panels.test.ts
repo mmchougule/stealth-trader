@@ -204,21 +204,17 @@ describe("withdraw note picker", () => {
     expect(flow.awaitWithdrawDest.has(42)).toBe(true); // re-armed for retry
   });
 
-  it("onWithdrawNote unshields the EXACT picked note id", async () => {
+  it("onWithdrawNote unshields to the stored dest + records the tx for verify", async () => {
     const flow = makeFlowState();
     flow.withdrawFlow.set(42, {
       dest,
       notes: [{ id: "note-A", amount: 30_000_000n }, { id: "note-B", amount: 20_000_000n }],
     });
     const cashout = vi.fn(async () => ({ txSignature: "WSIG" }));
-    const deps = { ...baseDeps, wallet: {
-      getHoldings: async () => [],
-      cashout,
-    }};
-    const ctx = makeCbCtx("wd:note:1"); // pick the second note
-    await onWithdrawNote(deps, flow, ctx);
-    expect(cashout).toHaveBeenCalledWith({ tgId: 42, recipient: dest, noteId: "note-B" });
-    expect(ctx.replies[0]!.text).toMatch(/Sent 0\.0200 SOL/);
+    const deps = { ...baseDeps, wallet: { getHoldings: async () => [], cashout } };
+    await onWithdrawNote(deps, flow, makeCbCtx("wd:note:1"));
+    expect(cashout).toHaveBeenCalledWith({ tgId: 42, recipient: dest });
+    expect(flow.lastTxSig.get(42)).toBe("WSIG"); // tracked for Verify privacy
     expect(flow.withdrawFlow.has(42)).toBe(false); // torn down
   });
 

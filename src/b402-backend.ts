@@ -103,10 +103,8 @@ export interface WalletBackend extends SwapBackend {
   /** Return shielded balances for the user, one row per mint. */
   getHoldings(tgId: number): Promise<Holding[]>;
   /** Unshield to a recipient. mint defaults to wSOL (so the recipient
-   *  receives native SOL through the wSOL→SOL unwrap inside the SDK).
-   *  `noteId` pins the exact shielded note to spend; omitting it lets the
-   *  SDK fall back to its most-recently-shielded note. */
-  cashout(args: { tgId: number; recipient: string; mint?: string; noteId?: string }): Promise<{ txSignature: string }>;
+   *  receives native SOL through the wSOL→SOL unwrap inside the SDK). */
+  cashout(args: { tgId: number; recipient: string; mint?: string }): Promise<{ txSignature: string }>;
   /** Lend a shielded token into Kamino. Burns one shielded note, mints a
    *  Kamino voucher note. Mainnet only (Kamino isn't on devnet). `amount`
    *  must equal one existing note's value — call `getNotes` first if you

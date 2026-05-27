@@ -60,50 +60,35 @@ describe("executeBuy — happy path", () => {
     const r = await t.executeBuy({ tgId: 1, mint: "XYZmint", solLamports: 5_000_000n });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.txSignature).toBe("sig-XYZm");
-
-    // 5_000_000 + fee (5bps + 0.0003 SOL = 2500 + 300000 = 302500) = 5_302_500 debited
-    expect(balance.bal.get(1)).toBe(100_000_000n - 5_302_500n);
     expect(backend.calls).toHaveLength(1);
+    // On-chain is the gate — no DB-ledger debit.
+    expect(balance.log).toHaveLength(0);
   });
 });
 
 describe("executeBuy — rejection paths", () => {
   beforeEach(() => _resetUserLocks());
 
-  it("returns error when amount < min trade", async () => {
+  it("returns error when amount < min trade, before touching the backend", async () => {
     const balance = new MemBalance(); balance.set(1, 100_000_000n);
     const backend = new GoodBackend();
-    const r = await makeTrade({ backend, balance }).executeBuy({
+    const r = await makeTrade({ backend, balance, recordBuy: async () => {} }).executeBuy({
       tgId: 1, mint: "x", solLamports: MIN_TRADE_LAMPORTS - 1n,
     });
     expect(r.ok).toBe(false);
     expect(backend.calls).toHaveLength(0);
-    expect(balance.bal.get(1)).toBe(100_000_000n); // no debit
   });
 
-  it("returns error on insufficient balance, never touches backend", async () => {
-    const balance = new MemBalance(); balance.set(1, 1_000_000n);
-    const backend = new GoodBackend();
-    const r = await makeTrade({ backend, balance }).executeBuy({
-      tgId: 1, mint: "x", solLamports: 50_000_000n,
-    });
-    expect(r.ok).toBe(false);
-    expect(backend.calls).toHaveLength(0);
-  });
-
-  it("refunds the full debit + fee when backend throws", async () => {
+  it("surfaces the backend error and touches no DB balance when shield/swap throws", async () => {
     const balance = new MemBalance(); balance.set(1, 100_000_000n);
-    const backend = new FailingBackend("relayer down");
-    const r = await makeTrade({ backend, balance }).executeBuy({
+    const backend = new FailingBackend("Transfer: insufficient lamports");
+    const r = await makeTrade({ backend, balance, recordBuy: async () => {} }).executeBuy({
       tgId: 1, mint: "x", solLamports: 5_000_000n,
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/relayer down/);
-    expect(balance.bal.get(1)).toBe(100_000_000n); // refund nets out
-    // Ledger should show one debit then one credit of equal magnitude.
-    const sum = balance.log.reduce((acc, e) => acc + e.delta, 0n);
-    expect(sum).toBe(0n);
-    expect(balance.log.find((e) => e.reason === "buy_refund")).toBeDefined();
+    if (!r.ok) expect(r.error).toMatch(/insufficient lamports/);
+    expect(backend.calls).toHaveLength(1); // backend WAS the gate
+    expect(balance.log).toHaveLength(0);   // no debit, no refund
   });
 });
 
@@ -150,9 +135,7 @@ describe("executeBuy — cost-basis ledger wiring", () => {
     const r = await t.executeBuy({ tgId: 1, mint: "x", solLamports: 5_000_000n });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/landed but ledger write failed/);
-    // The swap is on chain — balance must stay DEBITED (no refund), and there
-    // must be NO buy_refund entry. Refunding here would double-credit the user.
-    expect(balance.bal.get(1)).toBe(100_000_000n - 5_302_500n);
+    // Swap is irreversibly on chain; no DB refund (we never debit one).
     expect(balance.log.find((e) => e.reason === "buy_refund")).toBeUndefined();
   });
 
@@ -174,9 +157,10 @@ describe("executeBuy — custom fee policy", () => {
   it("respects an injected computeBuyFee", async () => {
     const balance = new MemBalance(); balance.set(1, 100_000_000n);
     const backend = new GoodBackend();
-    const t = makeTrade({ backend, balance, computeBuyFee: () => 0n, recordBuy: async () => {} }); // zero fee
+    const recorded: any[] = [];
+    const t = makeTrade({ backend, balance, computeBuyFee: () => 0n, recordBuy: async (a) => { recorded.push(a); } });
     const r = await t.executeBuy({ tgId: 1, mint: "x", solLamports: 5_000_000n });
     expect(r.ok).toBe(true);
-    expect(balance.bal.get(1)).toBe(100_000_000n - 5_000_000n);
+    expect(recorded[0].feeLamports).toBe(0n); // injected zero fee flows to the ledger row
   });
 });
