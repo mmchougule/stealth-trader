@@ -21,7 +21,26 @@ stealth-trader is an open-source Telegram bot + MCP server for private Solana tr
   </tr>
 </table>
 
-**Hosted demo, no install:** [t.me/btrader021bot](https://t.me/btrader021bot) — `/start`, send a little SOL, tap Buy. The hosted bot also previews the upcoming copy-trade flow. This repo ships v0.5: `/buy`, `/sell`, `/cashout`, `/holdings`, leader discovery, and the MCP server. `/follow` lands in v0.6 once the webhook proxy is packaged for self-hosters.
+## Get started
+
+**Use it from an agent — one command** (Claude Code, Cursor, any MCP runtime):
+
+```bash
+claude mcp add stealth-trader -- npx -y @b402ai/stealth-trader@latest mcp
+```
+
+Your agent can now **buy, sell, check holdings, and cash out — privately**. Ask it: *"privately buy 0.01 SOL of `<mint>`, then cash out to a fresh address."* It composes the tools and signs nothing with your wallet. (Env: `STEALTH_TG_ID`, `MASTER_SEED`, `HELIUS_RPC_URL`.)
+
+**Prove it's real first — no keys, real mainnet, ~25s:**
+
+```bash
+git clone https://github.com/mmchougule/stealth-trader && cd stealth-trader
+pnpm install && pnpm smoke
+```
+
+Runs a real shield → swap → cashout and prints two Solscan links. Open them: your wallet is **not** in the swap's `accountKeys`. ([full steps + cost ↓](#try-it-in-30-seconds))
+
+**Or just tap buttons** — hosted Telegram bot: [t.me/btrader021bot](https://t.me/btrader021bot) (`/start`, send a little SOL, tap Buy). This repo ships v0.5 (`/buy`, `/sell`, `/cashout`, `/holdings`, leader discovery, MCP); `/follow` lands in v0.6.
 
 ## What it does (v0.5)
 
