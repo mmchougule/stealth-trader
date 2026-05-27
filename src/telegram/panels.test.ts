@@ -215,8 +215,10 @@ describe("withdraw note picker", () => {
     });
     const cashout = vi.fn(async () => ({ txSignature: "WSIG" }));
     const deps = { ...baseDeps, wallet: { getHoldings: async () => [], cashout } };
-    await onWithdrawNote(deps, flow, makeCbCtx("wd:note:1"));
-    expect(cashout).toHaveBeenCalledWith({ tgId: 42, recipient: dest });
+    const ctx = makeCbCtx("wd:note:1"); // pick the second note
+    await onWithdrawNote(deps, flow, ctx);
+    expect(cashout).toHaveBeenCalledWith({ tgId: 42, recipient: dest, noteId: "note-B" });
+    expect(ctx.replies[0]!.text).toMatch(/Sent 0\.0200 SOL/); // the picked note's amount
     expect(flow.lastTxSig.get(42)).toBe("WSIG"); // tracked for Verify privacy
     expect(flow.withdrawFlow.has(42)).toBe(false); // torn down
   });

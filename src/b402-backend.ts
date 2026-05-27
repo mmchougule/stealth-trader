@@ -26,6 +26,12 @@ import { ensureRecipientAta } from "./b402/recipient-ata.js";
 
 const WSOL_MINT_B58 = NATIVE_MINT.toBase58();
 
+/** The SDK's public note id: first 16 hex chars of the commitment. holdings()
+ *  ids use this, so matching a full SpendableNote by it lets us pin a note. */
+function noteIdOf(commitment: bigint): string {
+  return commitment.toString(16).padStart(64, "0").slice(0, 16);
+}
+
 // Whitelisted mints — seed the SDK's Fr-reducer registry at construction so
 // that post-restart (cold instance) holdings()/getNotes() resolve memecoin
 // notes to their base58 mint instead of the opaque "unknown:<frhex>" label.
@@ -102,9 +108,10 @@ export interface WalletBackend extends SwapBackend {
   privateSell(args: { tgId: number; mint: string; rawAmount: bigint }): Promise<{ txSignature: string; solReceived: bigint }>;
   /** Return shielded balances for the user, one row per mint. */
   getHoldings(tgId: number): Promise<Holding[]>;
-  /** Unshield to a recipient. mint defaults to wSOL (so the recipient
-   *  receives native SOL through the wSOL→SOL unwrap inside the SDK). */
-  cashout(args: { tgId: number; recipient: string; mint?: string }): Promise<{ txSignature: string }>;
+  /** Unshield to a recipient. mint defaults to wSOL. `noteId` pins the exact
+   *  shielded note to spend (the Withdraw picker passes the one the user taps);
+   *  omitting it lets the SDK pick a spendable note. */
+  cashout(args: { tgId: number; recipient: string; mint?: string; noteId?: string }): Promise<{ txSignature: string }>;
   /** Lend a shielded token into Kamino. Burns one shielded note, mints a
    *  Kamino voucher note. Mainnet only (Kamino isn't on devnet). `amount`
    *  must equal one existing note's value — call `getNotes` first if you
@@ -133,6 +140,10 @@ interface SdkLike {
   /** Teach the SDK a mint pubkey so holdings()/getNotes() resolve its
    *  Fr-reduced tokenMint back to base58 instead of "unknown:<hex>". */
   learnMint(mint: PublicKey): void;
+  /** In-memory note store. getAllSpendable() returns full SpendableNotes
+   *  (with `commitment`), needed to pin an exact note for unshield — holdings()
+   *  only returns summaries. */
+  notes?: { getAllSpendable(): Array<{ commitment: bigint }> };
   /** Re-sync the note store from on-chain history by `limit` commitments from
    *  the persisted cursor. Returns how much it ingested so callers can loop
    *  until caught up (a cold store after a DB reset is hundreds of commitments
@@ -417,13 +428,21 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
         const conn = new Connection(deps.rpcUrl, "confirmed");
         await ensureRecipientAta(conn, deps.operatorFeeKeypair, recipient, mint);
       }
-      // Pin the exact note when the caller chose one (Withdraw picker). The
-      // SDK's holdings() entries ARE spendable notes; find the one by id and
-      // pass it so unshield doesn't fall back to most-recently-shielded only.
+      // Pin the exact note the user picked (Withdraw picker passes its id).
+      // holdings() ids are the SDK's noteId = first 16 hex of the commitment;
+      // match a full SpendableNote from the note store by the same scheme and
+      // pass it so unshield spends THAT note, not the most-recently-shielded.
+      // The indexer (configured above) lets the SDK prove any leaf.
+      let note: unknown;
+      if (args.noteId && sdk.notes) {
+        note = sdk.notes.getAllSpendable().find((n) => noteIdOf(n.commitment) === args.noteId);
+        if (!note) throw new Error("that note is no longer spendable — tap Withdraw again");
+      }
       const { photonRpc, alt } = await buildPhase9Deps(deps.rpcUrl, deps.cluster);
       const res = await sdk.unshield({
         to: recipient,
         mint,
+        ...(note ? { note } : {}),
         photonRpc,
         alt,
       });

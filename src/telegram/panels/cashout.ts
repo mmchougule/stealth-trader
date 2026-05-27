@@ -129,16 +129,17 @@ export async function onWithdrawNote(deps: Deps, flow: FlowState, ctx: CallbackC
     await ctx.editText("wallet backend not configured on this instance.");
     return;
   }
+  const note = f.notes[idx]!;
   flow.withdrawFlow.delete(ctx.tgId);
   await ctx.answer();
-  await ctx.editText("Withdrawing...");
+  await ctx.editText(`Withdrawing ${solStr(note.amount, 4)} SOL...`);
   try {
-    const res = await deps.wallet.cashout({ tgId: ctx.tgId, recipient: f.dest });
+    const res = await deps.wallet.cashout({ tgId: ctx.tgId, recipient: f.dest, noteId: note.id });
     flow.lastTxSig.set(ctx.tgId, res.txSignature);
     await ctx.reply(
       [
-        `Withdrawal sent to ${shortMint(f.dest)}`,
-        "No on-chain link to your deposit address. Amount + status on Solscan.",
+        `Sent ${solStr(note.amount, 4)} SOL to ${shortMint(f.dest)}`,
+        "No on-chain link to your deposit address.",
       ].join("\n"),
       [
         [{ text: "Verify on Solscan", url: `https://solscan.io/tx/${res.txSignature}` }],
