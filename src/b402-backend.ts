@@ -37,7 +37,7 @@ const WSOL_MINT_B58 = NATIVE_MINT.toBase58();
 // from Postgres persistence) has NEVER called swap() — so without this seed,
 // a shielded BONK note from a prior session resolves to "unknown:<hex>",
 // which is non-base58 and makes `new PublicKey(mint)` throw "Non-base58
-// character" in the sell/holdings path. Mirrors b402-trader's HOT_MINTS seed.
+// character" in the sell/holdings path. Mirrors the reference trader's HOT_MINTS seed.
 
 // Hosted b402 indexer. The SDK uses it to (a) enumerate ALL shielded notes
 // for a viewing key — including ones shielded on another device / before a
@@ -225,7 +225,7 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
       // photonRpc: route the SDK's holdings/balance scans + validity proofs
       // through our configured (Helius/Triton) RPC. Without it the SDK falls
       // back to the public mainnet RPC for Photon reads, which 429s on the
-      // first holdings({ refresh: true }). Mirrors b402-trader's photonRpc wiring.
+      // first holdings({ refresh: true }). Mirrors the reference trader's photonRpc wiring.
       const { createRpc } = await import("@lightprotocol/stateless.js");
       const photonRpc = createRpc(deps.rpcUrl, deps.rpcUrl);
       const sdkWithPersist = new B402Solana({
@@ -267,7 +267,7 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
   return {
     async privateBuy(args) {
       // Two funding paths, decided by whether an exact-match shielded wSOL
-      // note already exists. Ported from b402-trader's shieldAndSwap(intent:
+      // note already exists. Ported from the reference trader's shieldAndSwap(intent:
       // "buy"). The Buy panel makes the choice concrete:
       //
       //   PRIVATE (🔒 note tap): args.solLamports == an existing wSOL note's
@@ -281,7 +281,7 @@ export function makeB402Backend(deps: BackendDeps): WalletBackend {
       // CRITICAL: if the swap fails AFTER a fresh shield, roll back by
       // unshielding the note to the derived wallet. Without this, every
       // failed swap stranded the user's SOL in an orphan wSOL note and
-      // drained their on-chain native — the bug that broke buys entirely.
+      // drained the wallet's native SOL.
       const userKp = deriveUserKeypair(args.tgId, deps.masterSeed);
       const sdk = await getSdk(args.tgId);
 

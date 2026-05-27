@@ -98,7 +98,7 @@ export interface FlowState {
   lastTxSig: Map<number, string>;
   /** Users who tapped "Buy" on the menu and now owe a pasted contract
    *  address. The next plain-text message from a member of this set is
-   *  treated as a CA → opens the buy panel. Mirrors b402-trader's
+   *  treated as a CA → opens the buy panel. Mirrors the reference trader's
    *  buyFlow.step === "await_ca". Cleared once the CA is consumed. */
   awaitBuyCa: Set<number>;
   /** Users who tapped "Withdraw" and now owe a pasted destination address.

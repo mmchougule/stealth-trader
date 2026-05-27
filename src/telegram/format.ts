@@ -78,7 +78,7 @@ export function formatNum(n: number): string {
  * (API down / token unindexed) and we say so rather than implying safety.
  * ASCII only per house style — no traffic-light emoji.
  *
- * Thresholds mirror b402-trader's buy panel: 0 or <1000 reads safe, <10000
+ * Thresholds mirror the reference trader's buy panel: 0 or <1000 reads safe, <10000
  * caution, otherwise high risk. The hard danger-flag block happens upstream
  * in safety.checkToken; this badge is the soft, informational signal.
  */

@@ -2,7 +2,7 @@
  * Withdraw / cashout — unshield a shielded SOL note to any address.
  *
  * The protocol unshields exactly ONE note per transaction, so withdraw is a
- * note picker, not a free-amount field — mirrors b402-trader's wd:note flow.
+ * note picker, not a free-amount field — mirrors the reference trader's wd:note flow.
  *
  *   /cashout <recipient> [mint]   one-shot command (power users / scripts;
  *                                 unshields the SDK's default note).

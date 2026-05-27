@@ -1,7 +1,7 @@
 /**
  * Deposit watcher — delta-balance polling.
  *
- * Algorithm (ported from b402-trader, mainnet-tested live):
+ * Algorithm (ported from the reference trader, mainnet-tested live):
  *   Every N ms, for every user with a derived deposit address:
  *     1. Read on-chain SOL balance via Connection.getMultipleAccountsInfo
  *        (batched ≤100 keys/RPC call — Solana's hard limit).

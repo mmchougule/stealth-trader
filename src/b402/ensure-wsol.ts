@@ -6,7 +6,7 @@
  * If the ATA already exists with enough wSOL, the caller should bypass
  * this entirely — that's the consumer's responsibility, not ours.
  *
- * Ported from b402-backend.ts as a focused helper. The b402-trader version
+ * Ported from b402-backend.ts as a focused helper. The the reference trader version
  * (src/b402-client.ts::ensureWsolBalanceWith) also pulls from shielded
  * notes when the bare wallet is short; that's a deeper recovery path
  * we don't ship in the OSS bot — strangers don't have stuck notes from

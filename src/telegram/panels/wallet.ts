@@ -1,7 +1,7 @@
 /**
  * Wallet — Private + Public balances + deposit address + Withdraw button.
  *
- * Ported from b402-trader's Wallet view, in native SOL units (this bot never
+ * Ported from the reference trader's Wallet view, in native SOL units (this bot never
  * shows guessed USD prices). Two sections:
  *
  *   🔒 PRIVATE  — shielded notes. Spendable via Buy / Sell / Withdraw, and

@@ -1,5 +1,5 @@
 /**
- * Sell panel — tap-to-trade inline keyboard, ported from b402-trader's
+ * Sell panel — tap-to-trade inline keyboard, ported from the reference trader's
  * sell:start / sell:note flow.
  *
  * Entry shapes:

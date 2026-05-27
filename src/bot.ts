@@ -83,7 +83,7 @@ async function main(): Promise<void> {
   // on-chain native balance — not the DB ledger. The ledger can drift above
   // on-chain native (e.g. a refunded-but-shielded prior buy), and offering a
   // chip larger than the wrappable native fails with "Transfer: insufficient
-  // lamports". b402-trader reads snap.publicSol (on-chain) for exactly this.
+  // lamports". the reference trader reads snap.publicSol (on-chain) for exactly this.
   const publicSolLamports = async (tgId: number): Promise<bigint> => {
     const pk = new PublicKey(userPubkey(tgId, masterSeed));
     return BigInt(await connection.getBalance(pk, "confirmed"));

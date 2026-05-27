@@ -99,7 +99,7 @@ export interface Deps {
   resolvePubkey(tgId: number): string;
   wallet?: WalletBackendCtx;
   /** LIVE on-chain native SOL (lamports) at the user's derived deposit
-   *  address — read fresh via Solana RPC on every call, like b402-trader's
+   *  address — read fresh via Solana RPC on every call, like the reference trader's
    *  getAccountSnapshot.publicSol. Wallet + /balance display this, NOT the DB
    *  ledger, so the user always sees real on-chain state. */
   publicNativeLamports?(tgId: number): Promise<bigint>;

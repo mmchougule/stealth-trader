@@ -131,7 +131,7 @@ export function makeTrade(deps: TradeDeps) {
     } catch (e) {
       // The swap is irreversibly on chain; do NOT refund. Surface a clear
       // operator-actionable error with the signature so the ledger can be
-      // reconciled manually. Mirrors b402-trader's post-success DB-write guard.
+      // reconciled manually. Mirrors the reference trader's post-success DB-write guard.
       const msg = e instanceof Error ? e.message : String(e);
       log.error(
         { tgId: args.tgId, mint: args.mint, sig: res.txSignature, err: msg },

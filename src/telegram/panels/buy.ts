@@ -1,5 +1,5 @@
 /**
- * Buy panel — tap-to-trade inline keyboard, ported from b402-trader's
+ * Buy panel — tap-to-trade inline keyboard, ported from the reference trader's
  * showBuyPanel.
  *
  * Two entry shapes:
@@ -39,7 +39,7 @@ import {
 const ONE_SOL = 1_000_000_000n;
 
 /** Headroom kept in the public balance for the shield ATA / tx fee on the
- *  public buy path. Mirrors b402-trader's RESERVE_SOL. */
+ *  public buy path. Mirrors the reference trader's RESERVE_SOL. */
 const RESERVE_LAMPORTS = 3_000_000n; // 0.003 SOL
 const NOTES_PER_PAGE = 2;
 
@@ -126,7 +126,7 @@ export function renderBuyPanel(args: {
     rugcheckBadge(rugScore),
     "",
     // ALWAYS show both balances — the two rows the user expects, like
-    // b402-trader. Buttons below are gated on the min trade size, but the
+    // the reference trader. Buttons below are gated on the min trade size, but the
     // balance is always visible so funds never look "missing".
     `🔒 Private: ${lamportsToSolStr(totalShieldedAll)} SOL${allNotesCount ? `  (${allNotesCount} note${allNotesCount === 1 ? "" : "s"})` : ""}`,
     `🌐 Public:  ${lamportsToSolStr(publicSolLamports)} SOL`,
@@ -251,7 +251,7 @@ async function runBuyCli(buy: BuyDeps, ctx: CommandCtx, mint: string, amountArg:
   }
   // RugCheck gate. checkToken is fail-open (unreachable / error → pass) so an
   // outage never blocks legit buys, but a confirmed danger verdict aborts
-  // before any SOL moves. Matches b402-trader's buy guard.
+  // before any SOL moves. Matches the reference trader's buy guard.
   const safety = await checkToken(mint);
   if (!safety.pass) {
     await ctx.reply(`blocked: ${safety.reason}\n\nif you still want it, this token failed an automated rug check.`);
@@ -362,7 +362,7 @@ export async function onBuyNotesMore(
 
 /** buy:tab:<notes|public> — record the tab choice + re-render. The panel
  *  shows both sections at once, so the tab is a soft preference; we keep the
- *  callback so the b402-trader contract is honored and future single-section
+ *  callback so the the reference trader contract is honored and future single-section
  *  layouts can branch on it. */
 export async function onBuyTab(
   buy: BuyDeps,

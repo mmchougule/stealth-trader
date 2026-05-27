@@ -6,7 +6,7 @@
  * for safety. Cached 60s, with a 5-min backoff on failure to avoid
  * hammering Coingecko's free tier into a 429-loop.
  *
- * No config fallback (b402-trader had `config.solUsd` as a hardcoded
+ * No config fallback (the reference trader had `config.solUsd` as a hardcoded
  * default — feedback rule says never hardcode token prices in product
  * code). On every failure path, callers receive `null` and the renderer
  * omits the USD line.

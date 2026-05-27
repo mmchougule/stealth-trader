@@ -40,7 +40,7 @@ import { makeFlowState, type FlowState } from "./state.js";
 
 // The persistent reply-keyboard menu. These four labels are the entire
 // no-typing surface: tapping one sends the label as a text message, caught by
-// the bot.hears handlers below. Layout + emojis mirror b402-trader's
+// the bot.hears handlers below. Layout + emojis mirror the reference trader's
 // mainMenu() so the two bots feel identical.
 //   Buy / Sell      — the two trade primitives.
 //   Wallet / Withdraw — fund + exit (the privacy unlock).
@@ -322,7 +322,7 @@ async function startHandler(deps: Deps, ctx: CommandCtx): Promise<void> {
 }
 
 async function balanceHandler(deps: Deps, ctx: CommandCtx): Promise<void> {
-  // LIVE balances, like b402-trader: public from Solana RPC, private from the
+  // LIVE balances, like the reference trader: public from Solana RPC, private from the
   // SDK (indexer-backed holdings). Never the DB ledger — that can lag/drift.
   const WSOL = "So11111111111111111111111111111111111111112";
   const [publicLamports, shieldedSol] = await Promise.all([

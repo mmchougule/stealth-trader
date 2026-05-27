@@ -1,5 +1,5 @@
 /**
- * Swap retry ladder — TWO dimensions, ported from b402-trader's
+ * Swap retry ladder — TWO dimensions, ported from the reference trader's
  * executePrivateSwap (mainnet-proven on production copy-trades).
  *
  *   1. dexes        — which Jupiter DEX labels the route may use.
@@ -22,7 +22,7 @@
  * Jupiter freely picked a nested DEX for sells and the relayer returned a
  * 502 wrapping "call depth too deep" — which then got mis-classified as a
  * transient route-stale 502 and retried on the same nested route. That is
- * the bug this restores parity for.
+ * the failure mode this guards against.
  *
  * Transient route-staleness (0x9 SlippageToleranceExceeded, 0x1789
  * RouteStale, a *bare* 502 rpc_failure) still gets a single in-place retry
@@ -159,7 +159,7 @@ export async function swapWithLadder(
   let lastErr: unknown = null;
 
   // Outer: dex set (fixes CPI-depth / no-routes). Inner: maxAccounts (fixes
-  // tx-too-large). Mirrors b402-trader's executePrivateSwap exactly.
+  // tx-too-large). Mirrors the reference trader's executePrivateSwap exactly.
   outer: for (const dexSet of dexes) {
     for (let i = 0; i < maxAccLadder.length; i++) {
       const maxAccounts = maxAccLadder[i]!;
