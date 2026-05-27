@@ -1,8 +1,8 @@
 # stealth-trader
 
-**MCP server + Telegram bot for agent-controllable private trading on Solana.** Drive it from Claude Code, Cursor, or any MCP runtime — your wallet never appears in the swap tx, the leader's block, or anyone's wallet tracker.
+**Trade on Solana without your wallet appearing in the swap transaction.**
 
-Deposit SOL once. After that, every action — buy, sell, lend, cash out — is signed by a relayer over zero-knowledge proofs against the [b402 shielded pool](https://github.com/mmchougule/b402-solana) on Solana mainnet (program `42a3hsCXtQLWonyxWZosaaCJCweYYKMrvNd25p1Jrt2y`). The swap lands on chain; the wallet that signed it isn't yours.
+stealth-trader is an open-source Telegram bot + MCP server for private Solana trading — tap buttons in Telegram, or drive it from Claude Code, Cursor, or any MCP runtime. You deposit SOL once into the [b402 shielded pool](https://github.com/mmchougule/b402-solana); after that, buys, sells, lends, and cashouts are executed by a relayer over zero-knowledge proofs. The trade still lands on-chain — but the signer is the relayer, not your wallet.
 
 [Quickstart](#try-it-in-30-seconds) · [What an agent sees](#what-an-agent-sees) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
 
@@ -21,7 +21,7 @@ Deposit SOL once. After that, every action — buy, sell, lend, cash out — is 
   </tr>
 </table>
 
-**Try it now, no install:** [t.me/btrader021bot](https://t.me/btrader021bot) — open in Telegram, `/start`, send a little SOL, `/buy <mint>`. This hosted bot runs the b402 SDK plus copy-trade (v0.6 here). The OSS v0.5 in this repo ships `/buy /sell /cashout /holdings` + the MCP server; copy-trade lands next.
+**Hosted demo, no install:** [t.me/btrader021bot](https://t.me/btrader021bot) — `/start`, send a little SOL, tap Buy. The hosted bot also previews the upcoming copy-trade flow. This repo ships v0.5: `/buy`, `/sell`, `/cashout`, `/holdings`, leader discovery, and the MCP server. `/follow` lands in v0.6 once the webhook proxy is packaged for self-hosters.
 
 ## What it does (v0.5)
 
@@ -189,7 +189,7 @@ vs. public DEX routers (Jupiter, Raydium UI, etc.):
 | your wallet signs the swap?                    | no             | yes           |
 | your wallet appears in `tx.accountKeys`?       | no             | yes           |
 | your portfolio is readable from your address?  | no             | yes           |
-| MEV bots can target your trade?                | no             | yes           |
+| wallet trackers can link the trade to you?     | no             | yes           |
 
 vs. copy-trade bots (Trojan, BullX, Photon, Maestro):
 
