@@ -91,7 +91,7 @@ async function main() {
   };
 
   const server = new Server(
-    { name: "stealth-trader", version: "0.5.0" },
+    { name: "stealth-trader", version: "0.5.1" },
     { capabilities: { tools: {} } },
   );
 
@@ -99,7 +99,10 @@ async function main() {
     tools: tools.map((t) => ({
       name: t.name,
       description: (t.schema.description ?? t.name),
-      inputSchema: zodToJsonSchema(t.schema, t.name),
+      // No `name` arg: that wraps the schema in a $ref/definitions envelope
+      // whose top level has no `type`, which MCP clients reject. Passing the
+      // schema alone emits an inline { type: "object", properties }.
+      inputSchema: zodToJsonSchema(t.schema),
     })),
   }));
 
