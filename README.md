@@ -2,7 +2,7 @@
 
 **Trade on Solana without your wallet appearing in the swap transaction.**
 
-stealth-trader is an open-source Telegram bot + MCP server for private Solana trading — tap buttons in Telegram, or drive it from Claude Code, Cursor, or any MCP runtime. You deposit SOL once into the [b402 shielded pool](https://github.com/mmchougule/b402-solana); after that, buys, sells, lends, and cashouts are executed by a relayer over zero-knowledge proofs. The trade still lands on-chain — but the signer is the relayer, not your wallet.
+stealth-trader is an open-source Telegram bot + MCP server for private Solana trading — use it in Telegram, or drive it from Claude Code, Cursor, or any MCP runtime. You deposit SOL once into the [b402 shielded pool](https://github.com/mmchougule/b402-solana); after that, buys, sells, lends, and cashouts are executed by a relayer over zero-knowledge proofs. The trade still lands on-chain — but the signer is the relayer, not your wallet.
 
 [Quickstart](#try-it-in-30-seconds) · [What an agent sees](#what-an-agent-sees) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
 
@@ -12,7 +12,7 @@ stealth-trader is an open-source Telegram bot + MCP server for private Solana tr
   <tr>
     <td align="center" valign="top" width="60%">
       <img src="docs/demo.gif" alt="terminal smoke — pnpm smoke runs shield + swap + cashout on Solana mainnet in ~25s" /><br/>
-      <sub><b>Terminal:</b> <code>pnpm smoke</code> — real mainnet shield → swap → cashout in ~25 seconds. Prints Solscan links so you can verify the depositor wallet is absent from <code>tx.accountKeys</code>.</sub>
+      <sub><b>Terminal:</b> <code>pnpm smoke</code> — a mainnet shield → swap → cashout in ~25 seconds. Prints Solscan links so you can verify the depositor wallet is absent from <code>tx.accountKeys</code>.</sub>
     </td>
     <td align="center" valign="top" width="40%">
       <img src="docs/tg-demo.gif" alt="hosted Telegram bot — buy a token, then verify on-chain the wallet isn't in the swap tx" /><br/>
@@ -31,16 +31,18 @@ claude mcp add stealth-trader -- npx -y @b402ai/stealth-trader@latest mcp
 
 Your agent can now **buy, sell, check holdings, and cash out — privately**. Ask it: *"privately buy 0.01 SOL of `<mint>`, then cash out to a fresh address."* It composes the tools and signs nothing with your wallet. (Env: `STEALTH_TG_ID`, `MASTER_SEED`, `HELIUS_RPC_URL`.)
 
-**Prove it's real first — no keys, real mainnet, ~25s:**
+**See it on mainnet — ~25s, costs ~$0.01:**
 
 ```bash
 git clone https://github.com/mmchougule/stealth-trader && cd stealth-trader
-pnpm install && pnpm smoke
+pnpm install
+export HELIUS_RPC_URL="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"   # free at helius.dev
+pnpm smoke
 ```
 
-Runs a real shield → swap → cashout and prints two Solscan links. Open them: your wallet is **not** in the swap's `accountKeys`. ([full steps + cost ↓](#try-it-in-30-seconds))
+Needs a Solana CLI wallet with ~0.005 SOL — the script auto-funds the test wallet from `~/.config/solana/id.json` (or fund the address it prints). It shields, swaps, and cashes out, then prints two Solscan links: your wallet is **not** in the swap's `accountKeys`. ([full steps + exact cost ↓](#try-it-in-30-seconds))
 
-**Or just tap buttons** — hosted Telegram bot: [t.me/btrader021bot](https://t.me/btrader021bot) (`/start`, send a little SOL, tap Buy). This repo ships v0.5 (`/buy`, `/sell`, `/cashout`, `/holdings`, leader discovery, MCP); `/follow` lands in v0.6.
+**Or use the hosted Telegram bot:** [t.me/btrader021bot](https://t.me/btrader021bot) — `/start`, send a little SOL, Buy. This repo ships v0.5 (`/buy`, `/sell`, `/cashout`, `/holdings`, leader discovery, MCP); `/follow` lands in v0.6.
 
 ## What it does (v0.5)
 
@@ -72,7 +74,7 @@ export HELIUS_RPC_URL="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
 pnpm smoke
 ```
 
-**Try it before any Telegram setup** — the smoke only needs a Helius key, runs against real mainnet in ~25 seconds, and proves the privacy property end-to-end.
+**Try it before any Telegram setup** — the smoke needs a Helius RPC URL + a funded Solana CLI wallet, runs on mainnet in ~25 seconds, and proves the privacy property end-to-end.
 
 Here's exactly what happens, no surprises:
 
