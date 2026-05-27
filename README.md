@@ -2,7 +2,7 @@
 
 **MCP server + Telegram bot for agent-controllable private trading on Solana.** Drive it from Claude Code, Cursor, or any MCP runtime — your wallet never appears in the swap tx, the leader's block, or anyone's wallet tracker.
 
-Built on the [b402 shielded pool](https://github.com/mmchougule/b402-solana) — same primitive that has processed **$800M+ in volume on Base**, now live on Solana mainnet (program `42a3hsCXtQLWonyxWZosaaCJCweYYKMrvNd25p1Jrt2y`). Shield SOL once. After that, every action — buy, copy a leader, lend, cash out — is signed by a relayer over zero-knowledge proofs.
+Deposit SOL once. After that, every action — buy, sell, lend, cash out — is signed by a relayer over zero-knowledge proofs against the [b402 shielded pool](https://github.com/mmchougule/b402-solana) on Solana mainnet (program `42a3hsCXtQLWonyxWZosaaCJCweYYKMrvNd25p1Jrt2y`). The swap lands on chain; the wallet that signed it isn't yours.
 
 [Quickstart](#try-it-in-30-seconds) · [What an agent sees](#what-an-agent-sees) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
 
@@ -40,9 +40,9 @@ Seven MCP tools an agent can compose: *"check this wallet's 7-day stats, then pr
 
 ## Why it matters
 
-Every public DeFi trade leaks three things: which trades are yours (sandwich bots front-run them), what your portfolio looks like (anyone with your address can see), and when you cash out (counterparties pre-position). The cost is real and measurable — MEV extraction on Solana ran into the tens of millions in 2025.
+On Solana, the wallet that signs your swap is your wallet — so every trade is stamped with your address in public. Anyone can front-run your buys, copy your positions in real time, read your whole portfolio from a single address, and watch exactly when you exit.
 
-stealth-trader closes all three by making the signing wallet on the trade NOT your wallet. Verifiable in 30 seconds on Solscan for any tx the bot produces — the depositor's address simply does not appear in `tx.accountKeys`.
+stealth-trader breaks that link: a relayer signs the trade, not you, so there's nothing to correlate. Don't take our word for it — open any tx the bot produces on Solscan and your deposit address is not in `tx.accountKeys`. The bot's "Verify privacy" button shows you that, per trade.
 
 ## Try it in 30 seconds
 
