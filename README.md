@@ -1,8 +1,8 @@
 # stealth-trader
 
-**Trade on Solana without your wallet appearing in the swap transaction.**
+**Private trading on Solana — your trades never link back to your wallet.**
 
-stealth-trader is an open-source Telegram bot + MCP server for private Solana trading — use it in Telegram, or drive it from Claude Code, Cursor, or any MCP runtime. You deposit SOL once into the [b402 shielded pool](https://github.com/mmchougule/b402-solana); after that, buys, sells, lends, and cashouts are executed by a relayer over zero-knowledge proofs. The trade still lands on-chain — but the signer is the relayer, not your wallet.
+An open-source Telegram bot + MCP server: trade by tapping in Telegram, or hand it to a Claude / Cursor agent. You deposit SOL once into the [b402 shielded pool](https://github.com/mmchougule/b402-solana); after that a relayer signs every buy, sell, lend, and cashout over zero-knowledge proofs. The trade lands on-chain — but the signer is the relayer, not you, so nothing ties it back to your address.
 
 [Get started](#get-started) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
 
