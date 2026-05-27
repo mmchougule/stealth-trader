@@ -4,7 +4,7 @@
 
 stealth-trader is an open-source Telegram bot + MCP server for private Solana trading — use it in Telegram, or drive it from Claude Code, Cursor, or any MCP runtime. You deposit SOL once into the [b402 shielded pool](https://github.com/mmchougule/b402-solana); after that, buys, sells, lends, and cashouts are executed by a relayer over zero-knowledge proofs. The trade still lands on-chain — but the signer is the relayer, not your wallet.
 
-[Quickstart](#try-it-in-30-seconds) · [What an agent sees](#what-an-agent-sees) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
+[Get started](#get-started) · [What it does](#what-it-does) · [MCP tools](#mcp-tools) · [How it works](#how-it-works) · [Security](SECURITY.md)
 
 ![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED) ![ci](https://github.com/mmchougule/stealth-trader/actions/workflows/ci.yml/badge.svg) ![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue) ![node: 20+](https://img.shields.io/badge/node-20+-339933) ![tests: 194](https://img.shields.io/badge/tests-194%20passing-green)
 
@@ -23,13 +23,21 @@ stealth-trader is an open-source Telegram bot + MCP server for private Solana tr
 
 ## Get started
 
-**Use it from an agent — one command** (Claude Code, Cursor, any MCP runtime):
+**Use it from an agent** (Claude Code, Cursor, any MCP runtime):
 
 ```bash
-claude mcp add stealth-trader -- npx -y @b402ai/stealth-trader@latest mcp
+claude mcp add stealth-trader \
+  -e MASTER_SEED=$(openssl rand -hex 32) \
+  -e HELIUS_RPC_URL="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY" \
+  -e STEALTH_TG_ID=1 \
+  -- npx -y @b402ai/stealth-trader@latest mcp
 ```
 
-Your agent can now **buy, sell, check holdings, and cash out — privately**. Ask it: *"privately buy 0.01 SOL of `<mint>`, then cash out to a fresh address."* It composes the tools and signs nothing with your wallet. (Env: `STEALTH_TG_ID`, `MASTER_SEED`, `HELIUS_RPC_URL`.)
+- `MASTER_SEED` derives your wallet — **back up the value `claude mcp add` stores; lose it, lose the funds.** (`openssl rand -hex 32` mints a fresh one.)
+- `STEALTH_TG_ID` is just a numeric account namespace — any integer works for solo use.
+- `HELIUS_RPC_URL` — free key at [helius.dev](https://helius.dev).
+
+Your agent can now **buy, sell, check holdings, and cash out — privately**. Ask it: *"privately buy 0.01 SOL of `<mint>`, then cash out to a fresh address."* It composes the tools and signs nothing with your own wallet — the relayer does.
 
 **See it on mainnet — ~25s, costs ~$0.01:**
 
@@ -90,20 +98,6 @@ The script prints two Solscan links. Open both: the test wallet address doesn't 
 **Net cost: ~$0.01** in tx fees + a few cents of swap slippage. The 0.0015 SOL becomes ~0.13 USDC and comes back to your CLI wallet at the cashout — nothing is drained.
 
 No Solana CLI keypair? The script prints the deposit address and waits 5 minutes for you to fund it manually.
-
-## What an agent sees
-
-Wire stealth-trader into your MCP runtime once:
-
-```bash
-claude mcp add stealth-trader -- npx -y @b402ai/stealth-trader@latest mcp
-```
-
-Now your agent has 7 tools. A single prompt composes them:
-
-> *"Score this wallet's last 7 days, then privately buy 0.01 SOL of USDC and cash out to a fresh address."*
-
-The agent calls `discover_leaders` to score candidates, `private_buy` to enter privately, `get_holdings` to check the position, and `cashout` to exit to an unlinkable address. Every trade is signed by the relayer — the agent's wallet never appears in `tx.accountKeys`. Composable, no extra setup.
 
 ## Use cases
 
