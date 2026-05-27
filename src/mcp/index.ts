@@ -6,20 +6,17 @@
  * Same business logic the Telegram bot uses; different surface.
  *
  * Install (Claude Code):
- *   claude mcp add stealth-trader -- node /abs/path/to/dist/mcp/index.js
+ *   claude mcp add stealth-trader -- npx -y @b402ai/stealth-trader@latest mcp
  *
- * Required env (same as bot.ts):
- *   STEALTH_TG_ID         — the Telegram user this MCP instance acts for
- *   DATABASE_URL          — Postgres
- *   HELIUS_RPC_URL        — RPC with api-key query param
- *   MASTER_SEED           — 64-hex root of trust (must match the bot's)
- *   B402_CLUSTER          — mainnet | devnet | localnet (default: mainnet)
+ * Zero-config: all env optional (see resolveMcpConfig).
+ *   MASTER_SEED     — root of trust; auto-generated + persisted if unset
+ *   STEALTH_TG_ID   — account namespace; default 1
+ *   HELIUS_RPC_URL  — RPC; default public mainnet (set one before trading)
+ *   DATABASE_URL    — Postgres; default pglite at ~/.stealth-trader/db
+ *   B402_CLUSTER    — mainnet | devnet | localnet (default: mainnet)
  *
- * One MCP server process serves one Telegram user. Spinning up an MCP
- * for someone else's tg_id requires their MASTER_SEED — which means
- * if MASTER_SEED is operator-controlled, the operator implicitly
- * controls every user's keypair. That's the same trust model as the
- * Telegram bot itself.
+ * One process serves one account (tgId). Whoever holds the MASTER_SEED
+ * controls that account's keypair — same trust model as the Telegram bot.
  */
 import "dotenv/config";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
