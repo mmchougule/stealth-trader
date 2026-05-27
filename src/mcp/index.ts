@@ -38,6 +38,7 @@ import { makeB402Backend, userPubkey } from "../b402-backend.js";
 import { makeBalanceStore } from "../balance.js";
 import { makeTrade } from "../trade.js";
 import { handlers, type McpDeps } from "./handlers.js";
+import { resolveMcpConfig } from "./config.js";
 import {
   getWalletInput, getBalanceInput, getHoldingsInput,
   privateBuyInput, cashoutInput, privateLendInput, discoverLeadersInput,
@@ -58,22 +59,20 @@ const tools = [
 ] as const;
 
 async function main() {
-  const tgId = Number(process.env.STEALTH_TG_ID ?? "");
-  if (!Number.isInteger(tgId) || tgId <= 0) {
-    process.stderr.write("STEALTH_TG_ID env var is required (positive integer).\n");
-    process.exit(1);
+  // Zero-config: every env var is optional (see resolveMcpConfig). Missing
+  // seed → generated + persisted; missing RPC → public mainnet.
+  const { tgId, masterSeedHex, rpcUrl, cluster, rpcDefaulted, generatedSeedPath } = resolveMcpConfig();
+  if (generatedSeedPath) {
+    process.stderr.write(
+      `[stealth-trader] generated a new wallet seed → ${generatedSeedPath}\n` +
+      `  BACK THIS UP. It derives your deposit wallet; lose it, lose the funds.\n`,
+    );
   }
-  const masterSeedHex = process.env.MASTER_SEED;
-  if (!masterSeedHex) {
-    process.stderr.write("MASTER_SEED env var is required (64 hex chars).\n");
-    process.exit(1);
+  if (rpcDefaulted && cluster === "mainnet") {
+    process.stderr.write(
+      "[stealth-trader] using public mainnet RPC (throttles). Set HELIUS_RPC_URL to a Helius/Triton endpoint for reliability.\n",
+    );
   }
-  const rpcUrl = process.env.HELIUS_RPC_URL;
-  if (!rpcUrl) {
-    process.stderr.write("HELIUS_RPC_URL env var is required.\n");
-    process.exit(1);
-  }
-  const cluster = (process.env.B402_CLUSTER ?? "mainnet") as "mainnet" | "devnet" | "localnet";
 
   const pool = await getPool();
   const here = path.dirname(fileURLToPath(import.meta.url));

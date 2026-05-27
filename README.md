@@ -23,19 +23,13 @@ stealth-trader is an open-source Telegram bot + MCP server for private Solana tr
 
 ## Get started
 
-**Use it from an agent** (Claude Code, Cursor, any MCP runtime):
+**Use it from an agent — one command, zero config** (Claude Code, Cursor, any MCP runtime):
 
 ```bash
-claude mcp add stealth-trader \
-  -e MASTER_SEED=$(openssl rand -hex 32) \
-  -e HELIUS_RPC_URL="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY" \
-  -e STEALTH_TG_ID=1 \
-  -- npx -y @b402ai/stealth-trader@latest mcp
+claude mcp add stealth-trader -- npx -y @b402ai/stealth-trader@latest mcp
 ```
 
-- `MASTER_SEED` derives your wallet — **back up the value `claude mcp add` stores; lose it, lose the funds.** (`openssl rand -hex 32` mints a fresh one.)
-- `STEALTH_TG_ID` is just a numeric account namespace — any integer works for solo use.
-- `HELIUS_RPC_URL` — free key at [helius.dev](https://helius.dev).
+First run generates a wallet and saves its seed to `~/.config/stealth-trader/master-seed` — **back that file up; it derives the wallet that holds your funds.** Set `HELIUS_RPC_URL` for a faster RPC (it defaults to public mainnet, which throttles).
 
 Your agent can now **buy, sell, check holdings, and cash out — privately**. Ask it: *"privately buy 0.01 SOL of `<mint>`, then cash out to a fresh address."* It composes the tools and signs nothing with your own wallet — the relayer does.
 
