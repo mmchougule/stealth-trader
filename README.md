@@ -151,17 +151,18 @@ Copy-trade (`/follow`, `/follows`, `/unfollow`) lands in v0.6 once the hosted He
 
 ## MCP tools
 
-Seven tools an agent (Claude Code, Cursor, custom) can compose. Example: *"score this wallet's last 7 days, privately buy 0.01 SOL of its top mint, then cash out to a fresh address."*
+Six tools an agent (Claude Code, Cursor, custom) can compose. Example: *"buy 0.05 SOL of this mint privately, then sell it back and cash out to a fresh address."*
 
 | tool                  | what it does                                                          |
 |-----------------------|------------------------------------------------------------------------|
-| `private_buy`         | swap SOL → any SPL token through the shielded pool                    |
-| `private_lend`        | lend a shielded token into Kamino (mainnet only)                      |
-| `cashout`             | unshield to a recipient with no on-chain link to your deposit         |
+| `get_wallet`          | the agent's deposit address (fund it with SOL)                        |
+| `get_balance`         | public SOL + shielded SOL + total available                           |
 | `get_holdings`        | shielded token balances per mint                                      |
-| `get_wallet`          | your deposit address (where you shield SOL once)                      |
-| `get_balance`         | public SOL balance available for new shields                          |
-| `discover_leaders`    | rank candidate wallets by recent on-chain PnL + activity              |
+| `private_buy`         | swap SOL → any SPL token through the shielded pool                    |
+| `private_sell`        | swap a shielded token note back to SOL                                |
+| `cashout`             | unshield to any recipient, with no on-chain link to the deposit       |
+
+Private lending (Kamino) and copy-trade/leader discovery land in a later release alongside the audited deployment.
 
 ## How it works
 
